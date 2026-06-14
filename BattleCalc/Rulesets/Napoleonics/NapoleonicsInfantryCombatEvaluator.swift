@@ -101,9 +101,11 @@ struct NapoleonicsInfantryCombatEvaluator {
 
         let baseDice = meleeBaseDice(
             for: attacker,
-            currentBlocks: context.attackerBlocks
+            currentBlocks: context.attackerBlocks,
+            movedHexes: context.movedHexes ?? 0
         )
 
+        
         let attackerTerrain = NapoleonicsTerrainLibrary.terrain(for: context.attackerTerrainID)
         let defenderTerrain = NapoleonicsTerrainLibrary.terrain(for: context.defenderTerrainID)
 
@@ -112,7 +114,13 @@ struct NapoleonicsInfantryCombatEvaluator {
             AppliedRule(
                 ruleID: "napoleonics.melee.baseRule",
                 title: "Base melee attack",
-                outcome: "\(baseDice) dice"
+                outcome: meleeBaseExplanation(
+                    for: attacker,
+                    currentBlocks: context.attackerBlocks,
+                    movedHexes: context.movedHexes ?? 0,
+                    result: baseDice
+                )
+
             )
         ]
 
@@ -514,7 +522,8 @@ struct NapoleonicsInfantryCombatEvaluator {
 
         case .halfCurrentBlocksRoundedDown:
             return currentBlocks / 2
-
+        case .halfCurrentBlocksRoundedDownMinusOne:
+            return currentBlocks / 2 - 1
         case .currentBlocks:
             return currentBlocks
         }
@@ -541,6 +550,9 @@ struct NapoleonicsInfantryCombatEvaluator {
 
         case .halfCurrentBlocksRoundedDown:
             return "Half current blocks rounded down: \(currentBlocks) -> \(result) dice"
+       
+        case .halfCurrentBlocksRoundedDownMinusOne:
+            return "Half current blocks rounded down, minus 1: \(currentBlocks) -> \(result) dice"
 
         case .currentBlocks:
             return "Current blocks used directly: \(currentBlocks) -> \(result) dice"
@@ -550,15 +562,52 @@ struct NapoleonicsInfantryCombatEvaluator {
     /// Melee comes straight from the unit's melee rule.
     private func meleeBaseDice(
         for unit: UnitDefinition,
-        currentBlocks: Int
+        currentBlocks: Int,
+        movedHexes: Int
     ) -> Int {
+        let movedThisTurn = movedHexes > 0
+
         switch unit.combatProfile.meleeRule {
         case .currentBlocks:
             return currentBlocks
+
         case .currentBlocksPlusOne:
             return currentBlocks + 1
+
+        case .currentBlocksMinusOneIfMoved:
+            return max(0, currentBlocks - (movedThisTurn ? 1 : 0))
+
         }
     }
+    
+    private func meleeBaseExplanation(
+        for unit: UnitDefinition,
+        currentBlocks: Int,
+        movedHexes: Int,
+        result: Int
+    ) -> String {
+        let movedThisTurn = movedHexes > 0
+
+        switch unit.combatProfile.meleeRule {
+        case .currentBlocks:
+            return "Current blocks used directly: \(currentBlocks) -> \(result) dice"
+
+        case .currentBlocksPlusOne:
+            return "Current blocks plus 1: \(currentBlocks) -> \(result) dice"
+
+        case .currentBlocksMinusOneIfMoved:
+            let countryName = unit.countryID.capitalized
+            let armName = unit.unitClass.rawValue.capitalized
+            if movedThisTurn {
+                return "Current blocks minus 1 because this \(countryName) \(armName) unit moved into melee this turn: \(currentBlocks) -> \(result) dice"
+            } else {
+                return "Current blocks with no movement penalty: \(currentBlocks) -> \(result) dice"
+            }
+
+        
+        }
+    }
+
 
     // MARK: - Terrain Helpers
 

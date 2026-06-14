@@ -37,6 +37,9 @@ enum MovingFireRule: String, Codable, CaseIterable, Hashable {
     /// Use half the current blocks and round down.
     /// Example: 3 blocks -> 1 die.
     case halfCurrentBlocksRoundedDown
+    
+    /// half rounded down minus 1 block
+    case halfCurrentBlocksRoundedDownMinusOne
 
     /// Use current blocks directly even after moving.
     case currentBlocks
@@ -46,7 +49,9 @@ enum MovingFireRule: String, Codable, CaseIterable, Hashable {
 enum MeleeRule: String, Codable, CaseIterable, Hashable {
     case currentBlocks
     case currentBlocksPlusOne
+    case currentBlocksMinusOneIfMoved
 }
+
 
 /// Focused set of bonus flags for the first evaluator.
 struct UnitCombatBonuses: Codable, Hashable {
