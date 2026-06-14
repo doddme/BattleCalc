@@ -11,6 +11,17 @@
 - Confirm that battle setups appear sorted by most recently updated.
 - Review docs/architecture.md and adjust any parts that no longer match the code.
 - Make a small change (for example, tweak battle name or notes handling) and commit again.
+- iPhone-first dice animation with haptics and sound, then a simpler Apple Watch companion roller once the core app model is settled
+- Rules for interactions For the Battle Which Side are you On?
+= Once we know what side - Which Arm is the Activated Unit (Infantry, Cavalry, Artillery)
+= Display a list of all the available units for that Arm of the service
+= Once chosen the list collapses if unchoses the list expands
+= Asking pertainent questions - Did the activated unit MOVE this turn, Did they move into the woods.  Is there a Combined Fire with Artillery, within range and has line of sight. 
+= Ask more questions about range of the Artillery and number of blocks it has for calculating number of dice.
+= Now Ask Terrain Pick Terrain you are on, and your Enemy unit is on
+= What type of Unit is being attacked 
+= Calculate the dice to Roll
+- Optionally show the dice roll.
 
 
 

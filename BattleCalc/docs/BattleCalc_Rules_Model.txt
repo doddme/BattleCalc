@@ -1,0 +1,173 @@
+BattleCalc Rules Model
+	Attack evaluation
+		Attack context
+			Activated unit
+			Attacker country
+			Attacker arms type
+			Attacker subtype
+			Attacker block count
+			Attacker terrain
+			Target selected
+			Target arms type
+			Target terrain
+			Range to target
+			Scenario in play
+			Active card effects
+		Attack type
+			Is target adjacent?
+			Is this melee?
+			Is this ranged fire?
+
+	Base unit rules
+		Unit fire permissions
+			Can this unit fire without moving?
+			Can this unit fire after moving?
+			Maximum move distance that still allows fire
+		Melee dice rules
+			Base melee dice = blocks
+			Melee bonus vs specific target types
+		Ranged dice rules
+			Base ranged dice = blocks
+			Ranged dice when moved (e.g. half blocks rounded up)
+		Unit-specific traits
+			Light infantry traits
+			Line infantry traits
+			Horse artillery traits
+			Foot artillery traits
+			Other unit-specific rules
+
+	Attacker terrain rules
+		Attacker terrain classification
+			Open
+			Woods
+			Town
+			Fordable stream
+			Other terrain types
+		Terrain fire permissions
+			Attacker in town after move: cannot fire
+			Attacker in woods: may fire
+			Attacker in fordable stream: may fire with penalty
+		Terrain melee effects
+			Does attacker terrain change melee behavior?
+		Terrain ranged effects
+			Does attacker terrain change ranged dice?
+			Movement into specific terrain this turn affects firing
+
+	Defender terrain rules
+		Defender terrain classification
+			Open
+			Woods
+			Town
+			Fordable stream
+			Other terrain types
+		Terrain protection effects
+			Target in town: dice reduction
+			Target in woods: dice reduction or to-hit change
+			Other terrain protection effects
+		Direction / range interactions
+			Does range change terrain benefit?
+			Does melee vs ranged change terrain benefit?
+
+	Scenario rules
+		Scenario options
+			Scenario name
+			Terrain option set chosen for this battle
+		Scenario terrain adjustments
+			Fordable stream penalty = 0
+			Fordable stream penalty = -1
+			Town protection increased or reduced
+			Other scenario-specific terrain changes
+		Scenario unit behavior adjustments
+			Unit movement changes
+			Unit fire permission changes
+		Scenario special conditions
+			Opening turn restrictions
+			Side-specific advantages
+
+	Temporary card effect rules
+		Card context
+			Card name
+			Which side played the card
+			Card duration (one attack, one turn, all turn)
+		Card effects
+			Sappers: ignore terrain protection
+			Card: allows fire after move
+			Card: adds dice to attack
+			Card: removes dice from attack
+			Card: changes melee vs ranged behavior
+		Card interaction with terrain
+			Does card override attacker terrain effects?
+			Does card override defender terrain protection?
+		Card interaction with unit traits
+			Does card change unit fire permissions?
+			Does card change dice rounding or calculation?
+
+	Target-specific rules
+		Target type categories
+			Target is infantry
+			Target is cavalry
+			Target is artillery
+			Other target classes
+		Target-based modifiers
+			Bonus vs infantry
+			Bonus vs cavalry
+			No bonus vs artillery
+		Range and target type
+			Adjacent target (melee)
+			Non-adjacent target (ranged)
+			Range bands and target-based changes
+
+	Dice calculation
+		Base dice determination
+			Determine melee vs ranged base dice from unit rules
+		Movement modifiers
+			Apply movement-related dice changes
+		Terrain modifiers
+			Apply attacker terrain effects
+			Apply defender terrain protection
+		Scenario modifiers
+			Apply scenario-specific dice changes
+		Card modifiers
+			Apply temporary card dice changes
+			Apply terrain-protection overrides
+		Target modifiers
+			Apply target-type bonuses or penalties
+		Rounding rules
+			Define when to round up or down
+		Final dice total
+			Compute final number of dice to roll
+
+	Legality checks
+		Attack legality
+			Is attack allowed given unit rules?
+			Is attack allowed given attacker terrain?
+			Is attack allowed given scenario rules?
+		Card legality
+			Is card usable in this context?
+			Does card conflict with other effects?
+
+	Explanation / trace
+		Reason summary
+			List rules that allowed or blocked attack
+			List rules that modified dice
+		List overrides that changed terrain effects
+		Player-facing explanation text
+			Short explanation for why attack is legal or illegal
+			Short explanation for how final dice were computed
+
+	Example cases
+		Example 1: French light infantry in woods
+			Context
+			Applicable rules
+			Overrides
+			Final result
+		Example 2: British line infantry firing at town
+			Context
+			Applicable rules
+			Overrides
+			Final result
+		Example 3: Horse artillery vs target in town with Sappers
+			Context
+			Applicable rules
+			Overrides
+			Final result

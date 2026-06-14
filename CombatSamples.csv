@@ -1,0 +1,5 @@
+id,name,movedHexes,targetDistance,attackerUnitID,attackerBlocks,attackerTerrainID,defenderUnitID,defenderBlocks,defenderTerrainID,expectedAllowed,expectedFinalDice,,,,,,
+t001,FrenchLightMoveToWoodMeleeWithInfantry,1,1,french-light-infantry,3,forest,british-line-infantry,3,clear,TRUE,4,,,,,,
+t002,FrenchLineMoveToWoodMeleeWithInfantry,1,1,french-line-infantry,3,forest,british-line-infantry,3,clear,TRUE,3,,,,,,
+t003,BritishLineMoveShootClear,1,2,british-line-infantry,5,clear,french-line-infantry,3,clear,TRUE,3,,,,,,
+t004,BritishLineStandShootClear,0,2,british-line-infantry,5,clear,french-line-infantry,3,clear,TRUE,6,,,,,,

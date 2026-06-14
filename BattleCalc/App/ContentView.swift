@@ -8,7 +8,10 @@
 import SwiftUI
 
 struct ContentView: View {
+    //var body: some View {
+    //    BattleSetupView()
+    //}
     var body: some View {
-        BattleSetupView()
+        NapoleonicsCombatDebugView()
     }
 }
