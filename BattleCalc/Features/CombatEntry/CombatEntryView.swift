@@ -29,7 +29,11 @@ struct CombatEntryView: View {
             List {
                 attackerSection
                 if vm.attackerTerrain != nil { defenderSection }
-                if vm.defenderTerrain != nil { extrasSection }
+                // PLAYTEST: distance now lives inline in the attacker flow
+                // (`targetDistanceRow`), so the standalone extras section is not
+                // shown. To revert to the old "Battle details" placement, restore
+                // `if vm.defenderTerrain != nil { extrasSection }` here and remove
+                // the `targetDistanceRow` call in `attackerSection`.
                 if vm.result != nil { resultSection }
             }
             .listStyle(.insetGrouped)
@@ -72,6 +76,13 @@ struct CombatEntryView: View {
                 if vm.attackerBlocks != nil {
                     CombatMovedRow(label: "Moved This Turn?", hexes: vm.attackerMovedHexes,
                                    maxMoved: vm.attackerMaxBlocks) { vm.attackerMovedHexes = $0 }
+                }
+                if vm.attackerMovedHexes != nil {
+                    // PLAYTEST: target distance moved earlier in the flow (was the
+                    // separate "Battle details" extras section). To revert, delete
+                    // this `targetDistanceRow` call, remove the helper below, and
+                    // re-enable `extrasSection` in `body` (see comments there).
+                    targetDistanceRow
                 }
                 if vm.attackerMovedHexes != nil {
                     // Terrain the attacker fires FROM. Separate from the defender's.
@@ -163,6 +174,23 @@ struct CombatEntryView: View {
                 Button("Done") { editingExtras = false }
             }
         }
+    }
+
+    // MARK: - Target distance (PLAYTEST: inline in the attacker flow)
+    // Self-contained distance picker shown between "Moved This Turn?" and the
+    // attacker terrain row. Uses the same 1...4 stepper and melee/ranged caption
+    // as the old `extrasSection` editor, so behavior (range 1 = melee, 2+ =
+    // ranged) is identical — only the placement changed. Delete this helper and
+    // re-enable `extrasSection` in `body` to move distance back to the end.
+    @ViewBuilder private var targetDistanceRow: some View {
+        Stepper(value: Binding(get: { vm.targetDistance },
+                               set: { vm.targetDistance = $0 }), in: 1...4) {
+            LabeledContent("Range to target (hexes)", value: "\(vm.targetDistance)")
+        }
+        Text(vm.targetDistance == 1 ? "Adjacent — resolved as melee."
+                                    : "\(vm.targetDistance) hexes — resolved as ranged fire.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
     }
 
     // MARK: - Result (auto-shown)

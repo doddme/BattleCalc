@@ -52,24 +52,67 @@ enum CombatEntryCatalog {
             .map { CombatPickItem(id: $0.rawValue, title: $0.rawValue.capitalized) }
     }
 
-    /// Unit types for a country + class, sorted by name.
+    /// Unit types for a country + class. Infantry uses a play-test-friendly rank
+    /// order (line, light, grenadier, guard, other, militia last); every other
+    /// class keeps the existing name sort. IDs/selections are unchanged.
     static func unitTypes(in countryID: String, classID: String) -> [CombatPickItem] {
-        NapoleonicsUnitLibrary.all
+        let units = NapoleonicsUnitLibrary.all
             .filter { $0.countryID == countryID && $0.unitClass.rawValue == classID }
-            .sorted { $0.name < $1.name }
-            .map { unit in
-                CombatPickItem(
-                    id: unit.id,
-                    title: unit.name,
-                    subtitle: "Range \(unit.combatProfile.range) · max \(unit.maxBlocks) blocks"
-                )
-            }
+
+        let ordered: [UnitDefinition]
+        if classID == UnitClass.infantry.rawValue {
+            // Stable secondary sort by name, then a stable primary sort by rank
+            // bucket, so units within the same bucket stay alphabetical.
+            ordered = units
+                .sorted { $0.name < $1.name }
+                .sorted { infantryRank($0) < infantryRank($1) }
+        } else {
+            ordered = units.sorted { $0.name < $1.name }
+        }
+
+        return ordered.map { unit in
+            CombatPickItem(
+                id: unit.id,
+                title: unit.name,
+                subtitle: "Range \(unit.combatProfile.range) · max \(unit.maxBlocks) blocks"
+            )
+        }
     }
 
-    /// All terrain definitions, sorted by name. Used for both attacker and
-    /// defender terrain because the two are selected independently.
+    /// Rank bucket for infantry display order: line(0), light(1), grenadier(2),
+    /// guard(3), other(4), militia(5, last). Matches on id/name keywords so it
+    /// works regardless of country prefix (e.g. "french-line-infantry").
+    private static func infantryRank(_ unit: UnitDefinition) -> Int {
+        let key = (unit.id + " " + unit.name).lowercased()
+        // Militia is checked first so it always sorts last even if another
+        // keyword somehow also appears.
+        if key.contains("militia")   { return 5 }
+        // Guard is checked before line/light/grenadier so every guard variant
+        // ("Young Guard", "Old Guard", "Guard Light", "Guard Grenadier") clusters
+        // in the guard bucket instead of splitting across the earlier buckets.
+        if key.contains("guard")     { return 3 }
+        if key.contains("line")      { return 0 }
+        if key.contains("light")     { return 1 }
+        if key.contains("grenadier") { return 2 }
+        return 4
+    }
+
+    /// Preferred terrain order for the picker: the common play-test terrains
+    /// first, then everything else in the library's existing (name-sorted)
+    /// order. IDs/selections are unchanged — this only reorders display rows.
+    /// Applied identically to attacker and defender terrain.
+    private static let preferredTerrainOrder = ["clear", "hill", "forest", "town", "walled-garden"]
+
+    /// All terrain definitions, ordered with `preferredTerrainOrder` first and
+    /// the remaining terrains after in their existing order. Used for both
+    /// attacker and defender terrain because the two are selected independently.
     static func terrains() -> [CombatPickItem] {
-        NapoleonicsTerrainLibrary.all.map { terrain in
+        let all = NapoleonicsTerrainLibrary.all
+        let priority = preferredTerrainOrder
+            .compactMap { id in all.first { $0.id == id } }
+        let priorityIDs = Set(priority.map(\.id))
+        let rest = all.filter { !priorityIDs.contains($0.id) }
+        return (priority + rest).map { terrain in
             CombatPickItem(id: terrain.id, title: terrain.name)
         }
     }
