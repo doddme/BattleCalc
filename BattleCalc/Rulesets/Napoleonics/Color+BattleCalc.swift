@@ -60,4 +60,22 @@ extension Color {
         green: 140 / 255,
         blue: 78 / 255
     )
+
+    // Maps a raw country id (as used in the rules data) to its country color,
+    // falling back to gray for any unknown id. Mirrors
+    // `CountryDefinition.displayColor` but works from an id alone, so the
+    // combat-entry rows can color a unit by its country without resolving the
+    // full CountryDefinition.
+    static func battleCalcCountry(_ countryID: String) -> Color {
+        switch countryID {
+        case "france":   return .battleCalcFrenchBlue
+        case "britain":  return .battleCalcBritishRed
+        case "portugal": return .battleCalcPortugueseBrown
+        case "spain":    return .battleCalcSpanishYellow
+        case "prussia":  return .battleCalcPrussianGray
+        case "austria":  return .battleCalcAustrianWhite
+        case "russia":   return .battleCalcRussianGreen
+        default:         return .gray
+        }
+    }
 }

@@ -8,10 +8,10 @@
 import SwiftUI
 
 struct ContentView: View {
-    //var body: some View {
+    // Earlier entry points, kept for reference:
     //    BattleSetupView()
-    //}
+    //    NapoleonicsCombatDebugView()
     var body: some View {
-        NapoleonicsCombatDebugView()
+        CombatEntryView()
     }
 }
