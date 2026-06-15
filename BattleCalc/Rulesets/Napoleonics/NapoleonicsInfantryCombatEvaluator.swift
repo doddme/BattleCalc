@@ -52,14 +52,6 @@ struct NapoleonicsInfantryCombatEvaluator {
         defender: UnitDefinition
     ) -> CombatResult {
 
-        // Version 1 supports infantry attackers only.
-        guard attacker.unitClass == .infantry else {
-            return blockedResult(
-                reason: "Version 1 evaluator only supports infantry attackers.",
-                ruleID: "napoleonics.infantry.only"
-            )
-        }
-
         let attackerTerrain = NapoleonicsTerrainLibrary.terrain(for: context.attackerTerrainID)
 
         if (context.movedHexes ?? 0) > 0,
@@ -72,16 +64,35 @@ struct NapoleonicsInfantryCombatEvaluator {
             )
         }
 
-        switch context.combatMode {
-        case .melee:
-            return evaluateMelee(
+        // Class dispatch. Infantry keeps the original melee/ranged paths
+        // unchanged. Cavalry and artillery have their own evaluators (Phase 2).
+        switch attacker.unitClass {
+        case .infantry:
+            switch context.combatMode {
+            case .melee:
+                return evaluateMelee(
+                    context: context,
+                    attacker: attacker,
+                    defender: defender
+                )
+
+            case .ranged:
+                return evaluateRanged(
+                    context: context,
+                    attacker: attacker,
+                    defender: defender
+                )
+            }
+
+        case .cavalry:
+            return evaluateCavalry(
                 context: context,
                 attacker: attacker,
                 defender: defender
             )
 
-        case .ranged:
-            return evaluateRanged(
+        case .artillery:
+            return evaluateArtillery(
                 context: context,
                 attacker: attacker,
                 defender: defender
@@ -416,6 +427,287 @@ struct NapoleonicsInfantryCombatEvaluator {
             notes: ["Napoleonics infantry ranged evaluation."],
             appliedRules: appliedRules
         )
+    }
+
+    // MARK: - Cavalry (Phase 2)
+
+    /// Cavalry is melee-only. Distance > 1 is not allowed. There is no
+    /// moved-into-melee penalty for cavalry, so base dice come from the unit's
+    /// melee rule with `movedHexes` forced to 0. Cavalry terrain in/out
+    /// modifiers apply through the shared class-based penalties; sabers depend
+    /// on the unit's `hasSaber` flag exactly as already modeled.
+    private func evaluateCavalry(
+        context: CombatContext,
+        attacker: UnitDefinition,
+        defender: UnitDefinition
+    ) -> CombatResult {
+
+        let distance = context.targetDistance ?? 1
+        guard distance <= 1 else {
+            return blockedResult(
+                reason: "\(attacker.name) is melee-only and cannot attack a target \(distance) hexes away.",
+                ruleID: "napoleonics.cavalry.meleeOnly"
+            )
+        }
+
+        // No moved-to-melee penalty for cavalry: force movedHexes to 0.
+        let baseDice = meleeBaseDice(
+            for: attacker,
+            currentBlocks: context.attackerBlocks,
+            movedHexes: 0
+        )
+
+        let attackerTerrain = NapoleonicsTerrainLibrary.terrain(for: context.attackerTerrainID)
+        let defenderTerrain = NapoleonicsTerrainLibrary.terrain(for: context.defenderTerrainID)
+
+        var modifiers: [CombatModifier] = []
+        var appliedRules: [AppliedRule] = [
+            AppliedRule(
+                ruleID: "napoleonics.cavalry.baseRule",
+                title: "Base cavalry melee",
+                outcome: "Current blocks \(context.attackerBlocks) -> \(baseDice) dice"
+            )
+        ]
+
+        applyTerrainModifiers(
+            attacker: attacker,
+            attackerTerrain: attackerTerrain,
+            defenderTerrain: defenderTerrain,
+            verb: "melee",
+            ruleNamespace: "napoleonics.cavalry",
+            modifiers: &modifiers,
+            appliedRules: &appliedRules
+        )
+
+        let modifierTotal = modifiers.map(\.value).reduce(0, +)
+        let finalDice = max(0, baseDice + modifierTotal)
+
+        appliedRules.append(
+            AppliedRule(
+                ruleID: "napoleonics.result.final",
+                title: "Final cavalry melee",
+                outcome: "\(finalDice) dice"
+            )
+        )
+
+        return CombatResult(
+            validation: CombatValidation(isAllowed: true, reasons: []),
+            baseDice: baseDice,
+            modifiers: modifiers,
+            modifierTotal: modifierTotal,
+            finalDice: finalDice,
+            notes: ["Napoleonics cavalry melee evaluation."],
+            appliedRules: appliedRules
+        )
+    }
+
+    // MARK: - Artillery (Phase 2)
+
+    /// Artillery ignores the legacy `range` column entirely. The active fire
+    /// band is selected by standing/moved × current block band (>1 or ==1).
+    /// Distance 1 is melee (base dice = active band index 0; sabers/terrain
+    /// apply; the defender's battle-back is left to the existing resolution
+    /// flow). Distance > 1 is fire (base dice = active band index distance-1).
+    /// A whole `nil` band = not allowed; a `nil` slot or a distance past the
+    /// band = out of range, reported with the table-derived range.
+    private func evaluateArtillery(
+        context: CombatContext,
+        attacker: UnitDefinition,
+        defender: UnitDefinition
+    ) -> CombatResult {
+
+        guard let tables = attacker.combatProfile.artilleryFireTables else {
+            return blockedResult(
+                reason: "\(attacker.name) has no artillery fire data.",
+                ruleID: "napoleonics.artillery.noTables"
+            )
+        }
+
+        let distance = context.targetDistance ?? 1
+        let moved = (context.movedHexes ?? 0) > 0
+        let singleBlock = context.attackerBlocks <= 1
+
+        guard let band = artilleryActiveBand(tables: tables, moved: moved, singleBlock: singleBlock) else {
+            return blockedResult(
+                reason: artilleryNotAllowedReason(attacker: attacker, moved: moved, singleBlock: singleBlock),
+                ruleID: "napoleonics.artillery.tableNotAllowed"
+            )
+        }
+
+        // The active moving band only says moving fire *exists*; maxMovementToShoot
+        // still caps how far the unit may move and still fire. So even when the
+        // moving table is populated (e.g. Horse Artillery), firing is NOT ALLOWED
+        // when movedHexes exceeds maxMovementToShoot — same concept as infantry.
+        // Distance 1 is melee (adjacent), which is governed by maxMovement rather
+        // than the fire cap, so this gate applies to fire (distance > 1) only.
+        let movedHexes = context.movedHexes ?? 0
+        if distance > 1, movedHexes > attacker.combatProfile.maxMovementToShoot {
+            return blockedResult(
+                reason: "\(attacker.name) cannot fire after moving \(movedHexes) hexes.",
+                ruleID: "napoleonics.artillery.movedCannotFire"
+            )
+        }
+
+        let derivedRange = artilleryDerivedRange(band)
+        let index = distance - 1
+        guard index >= 0, index < band.count, let slotDice = band[index] else {
+            return blockedResult(
+                reason: "Target is out of range. This artillery range is \(derivedRange) hex\(derivedRange == 1 ? "" : "es").",
+                ruleID: "napoleonics.artillery.outOfRange"
+            )
+        }
+
+        let isMelee = distance <= 1
+        let baseDice = slotDice
+
+        let attackerTerrain = NapoleonicsTerrainLibrary.terrain(for: context.attackerTerrainID)
+        let defenderTerrain = NapoleonicsTerrainLibrary.terrain(for: context.defenderTerrainID)
+
+        var modifiers: [CombatModifier] = []
+        var appliedRules: [AppliedRule] = [
+            AppliedRule(
+                ruleID: isMelee ? "napoleonics.artillery.meleeBase" : "napoleonics.artillery.fireBase",
+                title: isMelee ? "Artillery melee base" : "Artillery fire base",
+                outcome: "Active table at \(distance) hex\(distance == 1 ? "" : "es") -> \(baseDice) dice"
+            )
+        ]
+
+        applyTerrainModifiers(
+            attacker: attacker,
+            attackerTerrain: attackerTerrain,
+            defenderTerrain: defenderTerrain,
+            verb: isMelee ? "melee" : "ranged fire",
+            ruleNamespace: isMelee ? "napoleonics.artillery.melee" : "napoleonics.artillery.fire",
+            modifiers: &modifiers,
+            appliedRules: &appliedRules
+        )
+
+        let modifierTotal = modifiers.map(\.value).reduce(0, +)
+        let finalDice = max(0, baseDice + modifierTotal)
+
+        appliedRules.append(
+            AppliedRule(
+                ruleID: "napoleonics.result.final",
+                title: isMelee ? "Final artillery melee" : "Final artillery fire",
+                outcome: "\(finalDice) dice"
+            )
+        )
+
+        return CombatResult(
+            validation: CombatValidation(isAllowed: true, reasons: []),
+            baseDice: baseDice,
+            modifiers: modifiers,
+            modifierTotal: modifierTotal,
+            finalDice: finalDice,
+            notes: [
+                "Napoleonics artillery \(isMelee ? "melee" : "fire") evaluation.",
+                "artilleryBase:\(baseDice)@\(distance)"
+            ],
+            appliedRules: appliedRules
+        )
+    }
+
+    // MARK: - Artillery Helpers (Phase 2)
+
+    /// Selects the active fire band for the current standing/moved × block-band
+    /// situation. Returns `nil` when that band is "not allowed".
+    private func artilleryActiveBand(
+        tables: ArtilleryFireTables,
+        moved: Bool,
+        singleBlock: Bool
+    ) -> ArtilleryFireBand? {
+        switch (moved, singleBlock) {
+        case (false, false): return tables.standingMultiBlock
+        case (false, true):  return tables.standingSingleBlock
+        case (true, false):  return tables.movingMultiBlock
+        case (true, true):   return tables.movingSingleBlock
+        }
+    }
+
+    /// Derived range for a band: highest non-nil slot index + 1 (trailing nil
+    /// slots = out of range, so they do not extend the range). An all-nil band
+    /// yields 0.
+    private func artilleryDerivedRange(_ band: ArtilleryFireBand) -> Int {
+        var range = 0
+        for (i, slot) in band.enumerated() where slot != nil {
+            range = i + 1
+        }
+        return range
+    }
+
+    /// Generic, unit-name based reason for a "not allowed" active band. Foot
+    /// guns have no moving bands; horse guns with 1 block may have no
+    /// moving-single band — both read naturally from the unit's name.
+    private func artilleryNotAllowedReason(
+        attacker: UnitDefinition,
+        moved: Bool,
+        singleBlock: Bool
+    ) -> String {
+        if moved {
+            if singleBlock {
+                return "\(attacker.name) with 1 block cannot fire after moving."
+            }
+            return "\(attacker.name) cannot fire after moving."
+        }
+        if singleBlock {
+            return "\(attacker.name) with 1 block cannot fire."
+        }
+        return "\(attacker.name) cannot fire in this situation."
+    }
+
+    /// Shared attacker-out / defender-into terrain modifiers for the Phase 2
+    /// cavalry and artillery paths. Mirrors the infantry terrain handling but
+    /// without the infantry-only hill-to-hill specials.
+    private func applyTerrainModifiers(
+        attacker: UnitDefinition,
+        attackerTerrain: TerrainDefinition?,
+        defenderTerrain: TerrainDefinition?,
+        verb: String,
+        ruleNamespace: String,
+        modifiers: inout [CombatModifier],
+        appliedRules: inout [AppliedRule]
+    ) {
+        if let attackerTerrain {
+            let penalty = outPenalty(for: attacker.unitClass, terrain: attackerTerrain)
+            if penalty != 0 {
+                modifiers.append(
+                    CombatModifier(
+                        id: UUID(),
+                        label: "Attacker terrain",
+                        value: penalty,
+                        detail: "Attacking out of \(attackerTerrain.name) affected \(verb)."
+                    )
+                )
+                appliedRules.append(
+                    AppliedRule(
+                        ruleID: "\(ruleNamespace).attackerTerrainOut",
+                        title: "Attacker terrain out penalty",
+                        outcome: "\(attackerTerrain.name): \(penalty) dice"
+                    )
+                )
+            }
+        }
+
+        if let defenderTerrain {
+            let penalty = intoPenalty(for: attacker.unitClass, terrain: defenderTerrain)
+            if penalty != 0 {
+                modifiers.append(
+                    CombatModifier(
+                        id: UUID(),
+                        label: "Defender terrain",
+                        value: penalty,
+                        detail: "Attacking into \(defenderTerrain.name) affected \(verb)."
+                    )
+                )
+                appliedRules.append(
+                    AppliedRule(
+                        ruleID: "\(ruleNamespace).defenderTerrainInto",
+                        title: "Defender terrain into penalty",
+                        outcome: "\(defenderTerrain.name): \(penalty) dice"
+                    )
+                )
+            }
+        }
     }
 
     // MARK: - Special Case Rules

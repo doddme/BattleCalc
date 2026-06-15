@@ -28,6 +28,11 @@ struct CombatEntryView: View {
         NavigationStack {
             List {
                 attackerSection
+                // Always-visible distance/mode banner between the two sides.
+                // Shown as soon as the attacker side is complete (so the target
+                // distance is known), independent of whether a result exists — so
+                // it no longer "sometimes appears, sometimes not".
+                if vm.attackerTerrain != nil { distanceBanner }
                 if vm.attackerTerrain != nil { defenderSection }
                 // PLAYTEST: distance now lives inline in the attacker flow
                 // (`targetDistanceRow`), so the standalone extras section is not
@@ -44,6 +49,23 @@ struct CombatEntryView: View {
                 CombatEntryDebugView(trace: vm.lastTrace, context: vm.buildContext())
             }
             #endif
+        }
+    }
+
+    // MARK: - Distance banner (between attacker and defender)
+    // Prominent, always-on line so the range/mode is easy to check at a glance.
+    // Uses the headline body font (same size as standard row text); the icon
+    // distinguishes melee (crossed swords) from ranged (scope). The phrase comes
+    // from the view model and is driven by the current target distance.
+    @ViewBuilder private var distanceBanner: some View {
+        Section {
+            HStack(spacing: 8) {
+                Image(systemName: vm.targetDistance == 1 ? "shield.lefthalf.filled" : "scope")
+                    .foregroundStyle(.tint)
+                Text(vm.distanceToTargetHeadline)
+                    .font(.headline)
+                Spacer()
+            }
         }
     }
 
@@ -73,9 +95,16 @@ struct CombatEntryView: View {
                     CombatBlocksRow(label: "Blocks", value: vm.attackerBlocks ?? vm.attackerMaxBlocks,
                                     maxBlocks: vm.attackerMaxBlocks) { vm.attackerBlocks = $0 }
                 }
+                // Every class asks "Moved This Turn?" (moving into woods/town can
+                // forbid battle). Cavalry needs only yes/no — the distance is
+                // irrelevant — so its stepper is suppressed (`distanceAdjustable:
+                // false`). Infantry/artillery keep yes/no + a hexes-moved stepper
+                // capped at the unit's maxMovement (e.g. artillery maxMovement 2
+                // cannot pick 3).
                 if vm.attackerBlocks != nil {
                     CombatMovedRow(label: "Moved This Turn?", hexes: vm.attackerMovedHexes,
-                                   maxMoved: vm.attackerMaxBlocks) { vm.attackerMovedHexes = $0 }
+                                   maxMoved: vm.maxMovedHexes,
+                                   distanceAdjustable: !vm.usesMovedYesNoOnly) { vm.attackerMovedHexes = $0 }
                 }
                 if vm.attackerMovedHexes != nil {
                     // PLAYTEST: target distance moved earlier in the flow (was the
@@ -183,14 +212,25 @@ struct CombatEntryView: View {
     // ranged) is identical — only the placement changed. Delete this helper and
     // re-enable `extrasSection` in `body` to move distance back to the end.
     @ViewBuilder private var targetDistanceRow: some View {
-        Stepper(value: Binding(get: { vm.targetDistance },
-                               set: { vm.targetDistance = $0 }), in: 1...4) {
-            LabeledContent("Range to target (hexes)", value: "\(vm.targetDistance)")
+        // Class-aware. Cavalry is melee-only, so the stepper locks to 1. Artillery
+        // and infantry use a 1...maxTargetDistance stepper, where the artillery max
+        // is derived from the active fire table (updates after moved/blocks change).
+        if vm.lockTargetDistanceToMelee {
+            LabeledContent("Range to target (hexes)", value: "1")
+            Text("Cavalry is melee-only — locked to adjacent (1 hex).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            let upper = max(1, vm.maxTargetDistance)
+            Stepper(value: Binding(get: { vm.targetDistance },
+                                   set: { vm.targetDistance = $0 }), in: 1...upper) {
+                LabeledContent("Range to target (hexes)", value: "\(vm.targetDistance) / \(upper)")
+            }
+            Text(vm.targetDistance == 1 ? "Adjacent — resolved as melee."
+                                        : "\(vm.targetDistance) hexes — resolved as ranged fire.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
-        Text(vm.targetDistance == 1 ? "Adjacent — resolved as melee."
-                                    : "\(vm.targetDistance) hexes — resolved as ranged fire.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
     }
 
     // MARK: - Result (auto-shown)
@@ -248,8 +288,14 @@ struct ResultBreakdownView: View {
             .font(.subheadline)
         } else {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Base Dice: \(breakdown.baseBlocks) block\(breakdown.baseBlocks == 1 ? "" : "s")")
-                    .font(.caption)
+                // Artillery shows a table-derived base ("Base Dice: 3 at 2 hexes");
+                // everything else shows the raw block count ("Base Dice: N blocks").
+                if let artilleryBase = breakdown.artilleryBaseDescription {
+                    Text("Base Dice: \(artilleryBase)").font(.caption)
+                } else {
+                    Text("Base Dice: \(breakdown.baseBlocks) block\(breakdown.baseBlocks == 1 ? "" : "s")")
+                        .font(.caption)
+                }
 
                 ForEach(breakdown.lines) { line in
                     HStack {
@@ -407,12 +453,15 @@ struct CombatBlocksRow: View {
 }
 
 /// Moved entry, prompted as "Moved This Turn?". First choice is No/Yes; "Yes"
-/// stores 1 hex and reveals a stepper for the exact number of hexes moved (maps
-/// to movedHexes). Boolean/hex behavior is unchanged — only the label differs.
+/// stores 1 hex and (when `distanceAdjustable`) reveals a stepper for the exact
+/// number of hexes moved (maps to movedHexes). Cavalry passes
+/// `distanceAdjustable: false`, so "Yes" stores 1 (meaning "moved") with no
+/// distance stepper — the value still feeds terrain-entry legality checks.
 struct CombatMovedRow: View {
     let label: String
     let hexes: Int?
     let maxMoved: Int
+    var distanceAdjustable: Bool = true
     let onChange: (Int) -> Void
 
     var body: some View {
@@ -420,7 +469,7 @@ struct CombatMovedRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 Toggle(label, isOn: Binding(get: { h > 0 },
                                             set: { onChange($0 ? max(1, h) : 0) }))
-                if h > 0 {
+                if distanceAdjustable, h > 0 {
                     Stepper(value: Binding(get: { h }, set: { onChange($0) }), in: 1...max(1, maxMoved)) {
                         LabeledContent("Hexes moved", value: "\(h)")
                     }

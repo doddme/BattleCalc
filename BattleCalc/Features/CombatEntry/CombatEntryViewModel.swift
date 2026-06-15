@@ -92,6 +92,63 @@ final class CombatEntryViewModel: ObservableObject {
     var attackerMaxBlocks: Int { attackerUnit.map { CombatEntryCatalog.maxBlocks(forUnit: $0.id) } ?? 8 }
     var defenderMaxBlocks: Int { defenderUnit.map { CombatEntryCatalog.maxBlocks(forUnit: $0.id) } ?? 8 }
 
+    // MARK: - Class-aware target distance (Phase 2).
+    // The distance row must adapt to the attacker's class: cavalry is melee-only
+    // (locked to 1), artillery's max comes from its *active* fire table (which
+    // depends on moved + blocks), and infantry keeps the fixed 1...4.
+    private var attackerUnitDefinition: UnitDefinition? {
+        attackerUnit.flatMap { NapoleonicsUnitLibrary.unit(for: $0.id) }
+    }
+
+    /// Attacker's unit class, or nil before a unit is chosen.
+    var attackerUnitClass: UnitClass? { attackerUnitDefinition?.unitClass }
+
+    /// Cavalry is melee-only, so the UI locks the distance row to 1.
+    var lockTargetDistanceToMelee: Bool { attackerUnitClass == .cavalry }
+
+    /// Cavalry still needs the moved yes/no question (moving into woods/town can
+    /// forbid battle — only Russian Cossacks fight after entering woods), but the
+    /// *distance* is irrelevant to cavalry, so the UI shows a yes/no row with no
+    /// hexes-moved stepper. Infantry and artillery keep yes/no + distance.
+    var usesMovedYesNoOnly: Bool { attackerUnitClass == .cavalry }
+
+    /// Upper bound for the "hexes moved" stepper: the attacker unit's own
+    /// `maxMovement`, so e.g. an artillery piece with maxMovement 2 cannot be set
+    /// to 3. Falls back to a permissive value before a unit is chosen.
+    var maxMovedHexes: Int { attackerUnitDefinition?.combatProfile.maxMovement ?? 8 }
+
+    /// Upper bound for the distance stepper. Cavalry -> 1; artillery -> its
+    /// active table's derived range (falls back to 4 when the active band is
+    /// "not allowed", since the engine still blocks the attack with the correct
+    /// reason); infantry/default -> 4 (unchanged behavior).
+    var maxTargetDistance: Int {
+        switch attackerUnitClass {
+        case .cavalry:   return 1
+        case .artillery: return artilleryActiveDerivedRange ?? 4
+        default:         return 4
+        }
+    }
+
+    /// Derived range (leading non-nil slot count) of the artillery attacker's
+    /// *active* fire band for the current moved/blocks situation, or nil when
+    /// there is no active band (not allowed) or the attacker is not artillery.
+    private var artilleryActiveDerivedRange: Int? {
+        guard let tables = attackerUnitDefinition?.combatProfile.artilleryFireTables else { return nil }
+        let moved = (attackerMovedHexes ?? 0) > 0
+        let singleBlock = (attackerBlocks ?? attackerMaxBlocks) <= 1
+        let band: ArtilleryFireBand?
+        switch (moved, singleBlock) {
+        case (false, false): band = tables.standingMultiBlock
+        case (false, true):  band = tables.standingSingleBlock
+        case (true, false):  band = tables.movingMultiBlock
+        case (true, true):   band = tables.movingSingleBlock
+        }
+        guard let band else { return nil }
+        var range = 0
+        for (i, slot) in band.enumerated() where slot != nil { range = i + 1 }
+        return range
+    }
+
     // MARK: - Collapsed-summary detail lines.
     // Compact "chips" shown on a side's colored summary box so the separate
     // blocks / moved / terrain rows can disappear once chosen. Only set values
@@ -103,7 +160,15 @@ final class CombatEntryViewModel: ObservableObject {
     var attackerSummaryDetail: String {
         var parts: [String] = []
         if let b = Self.blocksChip(attackerBlocks) { parts.append(b) }
-        if let m = attackerMovedHexes { parts.append(m > 0 ? "Moved \(m) hex\(m == 1 ? "" : "es")" : "Stationary") }
+        // Cavalry tracks moved yes/no only, so its chip omits the hex count
+        // ("Moved" / "Stationary"); infantry/artillery show the distance.
+        if let m = attackerMovedHexes {
+            if usesMovedYesNoOnly {
+                parts.append(m > 0 ? "Moved" : "Stationary")
+            } else {
+                parts.append(m > 0 ? "Moved \(m) hex\(m == 1 ? "" : "es")" : "Stationary")
+            }
+        }
         if let t = attackerTerrain { parts.append(t.title) }
         return parts.joined(separator: " • ")
     }
@@ -127,6 +192,18 @@ final class CombatEntryViewModel: ObservableObject {
         return "\(targetDistance) hex\(targetDistance == 1 ? "" : "es") • \(mode)"
     }
 
+    /// Prominent, always-visible distance/mode phrase shown between the attacker
+    /// and defender. Distance 1 reads as melee ("Defender in Melee at 1 hex");
+    /// distance > 1 reads as ranged ("Defender at Range Attack 2 hexes away"),
+    /// driven purely by the current `targetDistance` (no engine dependency, so it
+    /// shows reliably whenever the distance is known).
+    var distanceToTargetHeadline: String {
+        if targetDistance == 1 {
+            return "Defender in Melee at 1 hex"
+        }
+        return "Defender at Range Attack \(targetDistance) hexes away"
+    }
+
     // MARK: - Cascade clearing (top-down within ONE side only).
     // Each helper clears everything below it on the same side. Cross-side
     // effects live solely in `attackerCountryDidChange`, so editing the
@@ -135,6 +212,9 @@ final class CombatEntryViewModel: ObservableObject {
     private func clearAttackerClass()   { attackerClass = nil;   clearAttackerUnit() }
     private func clearAttackerUnit()     { attackerUnit = nil;    clearAttackerBlocks() }
     private func clearAttackerBlocks()   { attackerBlocks = nil;  clearAttackerMoved() }
+    // All classes (cavalry included) now show a "Moved This Turn?" row, so moved
+    // can clear to nil for everyone: the row re-prompts and re-populates it, so a
+    // cavalry edit can re-complete and collapse to its summary without stranding.
     private func clearAttackerMoved()    { attackerMovedHexes = nil; clearAttackerTerrain() }
     private func clearAttackerTerrain()  { attackerTerrain = nil; recompute() }
 
@@ -154,6 +234,20 @@ final class CombatEntryViewModel: ObservableObject {
     private func attackerUnitDidChange() {
         if attackerUnit != nil { attackerBlocks = attackerMaxBlocks }
         else { clearAttackerBlocks() }
+        reconcileMovedForUnit()
+    }
+
+    /// Reconciles `attackerMovedHexes` with the freshly chosen unit: clamps a
+    /// previously-entered distance larger than the new unit's `maxMovement` down
+    /// so the UI/context can never carry an out-of-range distance. Cavalry tracks
+    /// moved yes/no only (a nonzero value just means "moved"), so it is not
+    /// distance-clamped here. Called after blocks default in (blocks' didSet has
+    /// already cleared moved to nil, so this is usually a no-op).
+    private func reconcileMovedForUnit() {
+        guard attackerUnit != nil, !usesMovedYesNoOnly else { return }
+        if let m = attackerMovedHexes, m > maxMovedHexes {
+            attackerMovedHexes = maxMovedHexes
+        }
     }
 
     private func defenderUnitDidChange() {
@@ -266,9 +360,15 @@ final class CombatEntryViewModel: ObservableObject {
         let total: Int                // sum of all line values
         let final: Int
 
+        /// Artillery base is table-derived, not a block count. When set, the UI
+        /// shows "Base Dice: 3 at 2 hexes" instead of "Base Dice: N blocks".
+        /// Nil for infantry/cavalry, so their display is unchanged.
+        var artilleryBaseDescription: String? = nil
+
         /// True when nothing modifies the base, so the UI can collapse to a
-        /// single "Melee: Final Dice: N" line.
-        var isTrivial: Bool { lines.isEmpty && baseBlocks == final }
+        /// single "Melee: Final Dice: N" line. Artillery always shows the
+        /// table-derived base, so a present description forces the full layout.
+        var isTrivial: Bool { artilleryBaseDescription == nil && lines.isEmpty && baseBlocks == final }
     }
 
     /// Builds the display breakdown for the current result, or nil when there is
@@ -294,19 +394,27 @@ final class CombatEntryViewModel: ObservableObject {
         let isMelee = targetDistance == 1
         var lines: [DiceModifierLine] = []
 
+        // Artillery base is table-derived (e.g. "3 at 2 hexes"), so the
+        // base-vs-blocks gap line below does not apply — the raw block count is
+        // not the base for artillery. For infantry/cavalry this is nil.
+        let artilleryBase = artilleryBaseDescription(from: r.notes)
+
         // Re-expose the base-vs-raw-blocks gap as an explicit line. For melee with
         // the moved penalty this is exactly -1 ("moved to melee"); for ranged the
         // fire rule may halve the blocks, so the gap is labeled generically.
-        let baseGap = base - blocks
-        if baseGap != 0 {
-            let movedThisTurn = (attackerMovedHexes ?? 0) > 0
-            let label: String
-            if isMelee {
-                label = movedThisTurn ? "moved to melee" : "base adjustment"
-            } else {
-                label = movedThisTurn ? "moving fire" : "standing fire"
+        // Skipped for artillery, whose base is not derived from block count.
+        if artilleryBase == nil {
+            let baseGap = base - blocks
+            if baseGap != 0 {
+                let movedThisTurn = (attackerMovedHexes ?? 0) > 0
+                let label: String
+                if isMelee {
+                    label = movedThisTurn ? "moved to melee" : "base adjustment"
+                } else {
+                    label = movedThisTurn ? "moving fire" : "standing fire"
+                }
+                lines.append(DiceModifierLine(label: label, value: baseGap))
             }
-            lines.append(DiceModifierLine(label: label, value: baseGap))
         }
 
         // Map each engine modifier to a short phrase. Terrain labels are generic
@@ -326,8 +434,21 @@ final class CombatEntryViewModel: ObservableObject {
             baseBlocks: blocks,
             lines: lines,
             total: total,
-            final: final
+            final: final,
+            artilleryBaseDescription: artilleryBase
         )
+    }
+
+    /// Parses the engine's machine-readable artillery base note
+    /// ("artilleryBase:3@2") into a human phrase ("3 at 2 hexes"). Returns nil
+    /// when the note is absent (non-artillery results), so their display is
+    /// unchanged.
+    private func artilleryBaseDescription(from notes: [String]) -> String? {
+        let marker = "artilleryBase:"
+        guard let note = notes.first(where: { $0.hasPrefix(marker) }) else { return nil }
+        let parts = note.dropFirst(marker.count).split(separator: "@")
+        guard parts.count == 2, let dice = Int(parts[0]), let dist = Int(parts[1]) else { return nil }
+        return "\(dice) at \(dist) hex\(dist == 1 ? "" : "es")"
     }
 
     /// Short, human phrase for one engine modifier. Prefers the terrain name from
@@ -368,6 +489,14 @@ final class CombatEntryViewModel: ObservableObject {
     // MARK: - Result.
     /// Recomputes whenever the request is fully specified; clears it otherwise.
     func recompute() {
+        // Keep the chosen distance within the attacker class's bounds. Switching
+        // to cavalry (or to an artillery situation with a shorter active range)
+        // must snap a previously-larger distance back in. The assignment re-enters
+        // recompute via targetDistance's didSet, but the second pass is a no-op
+        // clamp, so it settles in one extra hop without looping.
+        let upper = max(1, maxTargetDistance)
+        if targetDistance > upper { targetDistance = upper; return }
+        if targetDistance < 1 { targetDistance = 1; return }
         guard let context = buildContext() else { result = nil; return }
         result = evaluator.evaluate(context: context)
     }

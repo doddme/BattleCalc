@@ -10,6 +10,8 @@ import Foundation
 
 /// Raw CSV row model.
 /// Keep this string-based so parsing and conversion stay separate.
+/// Fields are populated by *header name* (see `UnitCSVColumn`), not position,
+/// so reordering or inserting columns in Numbers/CSV no longer breaks loading.
 private struct UnitCSVRow {
     let id: String
     let countryID: String
@@ -25,6 +27,35 @@ private struct UnitCSVRow {
     let meleeBonusVsInfantry: String
     let canBattleAfterEnteringTerrainIDs: String
     let hasSaber: String
+
+    // New optional cavalry/artillery support fields. Absent column or blank
+    // value is allowed; defaults preserve current infantry behavior.
+    let isMeleeOnly: String
+    let artilleryStandingMultiBlock: String
+    let artilleryStandingSingleBlock: String
+    let artilleryMovingMultiBlock: String
+    let artilleryMovingSingleBlock: String
+}
+
+/// Canonical CSV column names. These are the exact header strings the loader
+/// expects in `Units.csv`. Required columns must be present (loader fails
+/// loudly via `.missingHeader` if not); optional columns may be omitted and
+/// default safely, so older CSVs without the new columns still load.
+private enum UnitCSVColumn {
+    // Required (must match a header in Units.csv).
+    static let required: [String] = [
+        "id", "countryID", "name", "unitClass", "maxBlocks",
+        "maxMovement", "maxMovementToShoot", "range",
+        "standingFireRule", "movingFireRule", "meleeDiceRule",
+        "meleeBonusVsInfantry", "canBattleAfterEnteringTerrainIDs", "hasSaber"
+    ]
+
+    // Optional new fields — safe to omit; blank/absent => default.
+    static let isMeleeOnly = "isMeleeOnly"
+    static let artilleryStandingMultiBlock = "artilleryStandingMultiBlock"
+    static let artilleryStandingSingleBlock = "artilleryStandingSingleBlock"
+    static let artilleryMovingMultiBlock = "artilleryMovingMultiBlock"
+    static let artilleryMovingSingleBlock = "artilleryMovingSingleBlock"
 }
 
 enum UnitLoadError: Error, LocalizedError {
@@ -32,6 +63,7 @@ enum UnitLoadError: Error, LocalizedError {
     case unreadableFile(String)
     case invalidRow(String)
     case invalidValue(field: String, value: String, unitID: String)
+    case missingHeader(String)
 
     var errorDescription: String? {
         switch self {
@@ -46,6 +78,9 @@ enum UnitLoadError: Error, LocalizedError {
 
         case .invalidValue(let field, let value, let unitID):
             return "Invalid value '\(value)' for field '\(field)' in unit '\(unitID)'."
+
+        case .missingHeader(let header):
+            return "Units.csv is missing required column header '\(header)'."
         }
     }
 }
@@ -77,42 +112,77 @@ enum NapoleonicsUnitCSVLoader {
             return []
         }
 
+        // Build a header-name -> column-index map from the first line. Parsing
+        // is now by name, not position, so columns can be reordered or new ones
+        // inserted in Numbers/CSV without breaking the loader.
+        let headerCells = splitCSV(lines[0])
+        var headerIndex: [String: Int] = [:]
+        for (index, rawName) in headerCells.enumerated() {
+            let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            // First occurrence wins; trailing empty header cells are skipped.
+            if headerIndex[name] == nil { headerIndex[name] = index }
+        }
+
+        // Required columns must exist by name, else fail loudly.
+        for required in UnitCSVColumn.required {
+            guard headerIndex[required] != nil else {
+                throw UnitLoadError.missingHeader(required)
+            }
+        }
+
         let dataLines = lines.dropFirst()
         var units: [UnitDefinition] = []
 
         for line in dataLines {
-            let columns = line
-                .split(separator: ",", omittingEmptySubsequences: false)
-                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            let columns = splitCSV(line)
 
-            // We only care about the first 14 real columns.
-            // Extra trailing empty CSV columns are ignored.
-            guard columns.count >= 14 else {
-                throw UnitLoadError.invalidRow(line)
+            // Reads a column by header name. Required headers are guaranteed to
+            // exist (checked above); optional columns missing or out of range
+            // return "" so new fields default safely.
+            func value(_ header: String) -> String {
+                guard let idx = headerIndex[header], idx < columns.count else { return "" }
+                return columns[idx]
             }
 
             let row = UnitCSVRow(
-                id: columns[0],
-                countryID: columns[1],
-                name: columns[2],
-                unitClass: columns[3],
-                maxBlocks: columns[4],
-                maxMovement: columns[5],
-                maxMovementToShoot: columns[6],
-                range: columns[7],
-                standingFireRule: columns[8],
-                movingFireRule: columns[9],
-                meleeRule: columns[10],
-                meleeBonusVsInfantry: columns[11],
-                canBattleAfterEnteringTerrainIDs: columns[12],
-                hasSaber: columns[13]
+                id: value("id"),
+                countryID: value("countryID"),
+                name: value("name"),
+                unitClass: value("unitClass"),
+                maxBlocks: value("maxBlocks"),
+                maxMovement: value("maxMovement"),
+                maxMovementToShoot: value("maxMovementToShoot"),
+                range: value("range"),
+                standingFireRule: value("standingFireRule"),
+                movingFireRule: value("movingFireRule"),
+                meleeRule: value("meleeDiceRule"),
+                meleeBonusVsInfantry: value("meleeBonusVsInfantry"),
+                canBattleAfterEnteringTerrainIDs: value("canBattleAfterEnteringTerrainIDs"),
+                hasSaber: value("hasSaber"),
+                isMeleeOnly: value(UnitCSVColumn.isMeleeOnly),
+                artilleryStandingMultiBlock: value(UnitCSVColumn.artilleryStandingMultiBlock),
+                artilleryStandingSingleBlock: value(UnitCSVColumn.artilleryStandingSingleBlock),
+                artilleryMovingMultiBlock: value(UnitCSVColumn.artilleryMovingMultiBlock),
+                artilleryMovingSingleBlock: value(UnitCSVColumn.artilleryMovingSingleBlock)
             )
+
+            // Skip fully blank lines (e.g. an id-less trailing row).
+            guard !row.id.isEmpty else { continue }
 
             let unit = try makeUnitDefinition(from: row)
             units.append(unit)
         }
 
         return units
+    }
+
+    /// Splits one CSV line into trimmed cells, preserving empty cells so that
+    /// header/column alignment by index is correct.
+    private static func splitCSV(_ line: String) -> [String] {
+        line
+            .split(separator: ",", omittingEmptySubsequences: false)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
     }
 
     private static func makeUnitDefinition(from row: UnitCSVRow) throws -> UnitDefinition {
@@ -127,19 +197,54 @@ enum NapoleonicsUnitCSVLoader {
                 maxMovement: try parseInt(row.maxMovement, field: "maxMovement", unitID: row.id),
                 maxMovementToShoot: try parseInt(row.maxMovementToShoot, field: "maxMovementToShoot", unitID: row.id),
                 range: try parseInt(row.range, field: "range", unitID: row.id),
-                standingFireRule: try parseStandingFireRule(row.standingFireRule, unitID: row.id),
-                movingFireRule: try parseMovingFireRule(row.movingFireRule, unitID: row.id),
-                meleeRule: try parseMeleeRule(row.meleeRule, unitID: row.id),
+                standingFireRule: try parseStandingFireRule(
+                    row.standingFireRule, unitID: row.id, default: .currentBlocks),
+                movingFireRule: try parseMovingFireRule(
+                    row.movingFireRule, unitID: row.id, default: .none),
+                meleeRule: try parseMeleeRule(
+                    row.meleeRule, unitID: row.id, default: .currentBlocks),
+                isMeleeOnly: try parseOptionalBool(
+                    row.isMeleeOnly,
+                    field: "isMeleeOnly",
+                    unitID: row.id,
+                    default: false
+                ),
+                artilleryFireTables: try parseArtilleryFireTables(from: row),
                 bonuses: UnitCombatBonuses(
-                    meleeBonusVsInfantry: try parseBool(
+                    meleeBonusVsInfantry: try parseOptionalBool(
                         row.meleeBonusVsInfantry,
                         field: "meleeBonusVsInfantry",
-                        unitID: row.id
+                        unitID: row.id,
+                        default: false
                     )
                 ),
                 canBattleAfterEnteringTerrainIDs: parseTerrainIDs(row.canBattleAfterEnteringTerrainIDs)
             )
         )
+    }
+
+    /// Assembles the optional artillery fire tables from the four pipe-delimited
+    /// CSV columns. A blank column => that band is `nil` (= attack not allowed
+    /// for that movement/block situation). Blank slots inside a non-blank column
+    /// are preserved as `nil` (= out of range at that distance). If all four are
+    /// blank the whole `ArtilleryFireTables` is `nil`, so non-artillery rows
+    /// stay unaffected.
+    private static func parseArtilleryFireTables(from row: UnitCSVRow) throws -> ArtilleryFireTables? {
+        let tables = ArtilleryFireTables(
+            standingMultiBlock: try parseArtilleryBand(
+                row.artilleryStandingMultiBlock,
+                field: UnitCSVColumn.artilleryStandingMultiBlock, unitID: row.id),
+            standingSingleBlock: try parseArtilleryBand(
+                row.artilleryStandingSingleBlock,
+                field: UnitCSVColumn.artilleryStandingSingleBlock, unitID: row.id),
+            movingMultiBlock: try parseArtilleryBand(
+                row.artilleryMovingMultiBlock,
+                field: UnitCSVColumn.artilleryMovingMultiBlock, unitID: row.id),
+            movingSingleBlock: try parseArtilleryBand(
+                row.artilleryMovingSingleBlock,
+                field: UnitCSVColumn.artilleryMovingSingleBlock, unitID: row.id)
+        )
+        return tables.hasAnyTable ? tables : nil
     }
 
     private static func parseUnitClass(_ value: String, unitID: String) throws -> UnitClass {
@@ -149,23 +254,38 @@ enum NapoleonicsUnitCSVLoader {
         return unitClass
     }
 
-    private static func parseStandingFireRule(_ value: String, unitID: String) throws -> StandingFireRule {
-        guard let rule = StandingFireRule(rawValue: value) else {
-            throw UnitLoadError.invalidValue(field: "standingFireRule", value: value, unitID: unitID)
+    /// Blank value yields `defaultValue` (non-infantry rows — cavalry/artillery —
+    /// legitimately leave fire rules blank); a non-blank but unknown value still
+    /// fails loudly so infantry typos are caught.
+    private static func parseStandingFireRule(
+        _ value: String, unitID: String, default defaultValue: StandingFireRule
+    ) throws -> StandingFireRule {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return defaultValue }
+        guard let rule = StandingFireRule(rawValue: trimmed) else {
+            throw UnitLoadError.invalidValue(field: "standingFireRule", value: trimmed, unitID: unitID)
         }
         return rule
     }
 
-    private static func parseMovingFireRule(_ value: String, unitID: String) throws -> MovingFireRule {
-        guard let rule = MovingFireRule(rawValue: value) else {
-            throw UnitLoadError.invalidValue(field: "movingFireRule", value: value, unitID: unitID)
+    private static func parseMovingFireRule(
+        _ value: String, unitID: String, default defaultValue: MovingFireRule
+    ) throws -> MovingFireRule {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return defaultValue }
+        guard let rule = MovingFireRule(rawValue: trimmed) else {
+            throw UnitLoadError.invalidValue(field: "movingFireRule", value: trimmed, unitID: unitID)
         }
         return rule
     }
 
-    private static func parseMeleeRule(_ value: String, unitID: String) throws -> MeleeRule {
-        guard let rule = MeleeRule(rawValue: value) else {
-            throw UnitLoadError.invalidValue(field: "meleeRule", value: value, unitID: unitID)
+    private static func parseMeleeRule(
+        _ value: String, unitID: String, default defaultValue: MeleeRule
+    ) throws -> MeleeRule {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return defaultValue }
+        guard let rule = MeleeRule(rawValue: trimmed) else {
+            throw UnitLoadError.invalidValue(field: "meleeRule", value: trimmed, unitID: unitID)
         }
         return rule
     }
@@ -186,6 +306,56 @@ enum NapoleonicsUnitCSVLoader {
             throw UnitLoadError.invalidValue(field: field, value: value, unitID: unitID)
         }
         return intValue
+    }
+
+    /// Like `parseBool`, but a blank/absent value yields `defaultValue`. Used
+    /// for new optional flags so existing rows (and CSVs without the column)
+    /// keep their current behavior.
+    private static func parseOptionalBool(
+        _ value: String,
+        field: String,
+        unitID: String,
+        default defaultValue: Bool
+    ) throws -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return defaultValue }
+        return try parseBool(trimmed, field: field, unitID: unitID)
+    }
+
+    /// Parses one pipe-delimited artillery fire band into an `ArtilleryFireBand`
+    /// (`[Int?]`), preserving blank slots so distance positions are not lost:
+    ///
+    /// - An entirely blank/whitespace field returns `nil` — the whole band is
+    ///   "not allowed" for that movement/block situation.
+    /// - Inside a non-blank field, every `|`-separated slot is kept: a numeric
+    ///   slot becomes its `Int` dice value; a blank slot becomes `nil` (= out
+    ///   of range at that distance). So `"3|2|1||"` => `[3, 2, 1, nil, nil]`
+    ///   (count 5), `"3|2|1|1|"` => `[3, 2, 1, 1, nil]` (count 5), and
+    ///   `"4|3|2|1|1"` => `[4, 3, 2, 1, 1]` (count 5).
+    /// - A non-blank slot that is not an integer fails loudly via
+    ///   `UnitLoadError.invalidValue` rather than being silently dropped.
+    private static func parseArtilleryBand(
+        _ value: String,
+        field: String,
+        unitID: String
+    ) throws -> ArtilleryFireBand? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        // `components(separatedBy:)` keeps interior AND trailing empty slots,
+        // so trailing blanks (out-of-range distances) are preserved.
+        var band: ArtilleryFireBand = []
+        for rawSlot in trimmed.components(separatedBy: "|") {
+            let slot = rawSlot.trimmingCharacters(in: .whitespacesAndNewlines)
+            if slot.isEmpty {
+                band.append(nil)
+            } else if let dice = Int(slot) {
+                band.append(dice)
+            } else {
+                throw UnitLoadError.invalidValue(field: field, value: slot, unitID: unitID)
+            }
+        }
+        return band
     }
 
     private static func parseTerrainIDs(_ value: String) -> [String] {

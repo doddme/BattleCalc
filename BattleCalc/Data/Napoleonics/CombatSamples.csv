@@ -6,3 +6,12 @@ t004,BritishLineStandShootClear,0,2,british-line-infantry,5,clear,french-line-in
 t005,SpanishLineinMeleeMovedClear,1,1,spanish-line-infantry,4,clear,french-line-infantry,3,clear,TRUE,3
 t006,SpanishLineinMeleeNoMoveClear,0,1,spanish-line-infantry,4,clear,french-line-infantry,3,clear,TRUE,4
 t007,SpanishLightinMeleeMovedWoods,1,1,spanish-light-infantry,4,forest,french-line-infantry,3,clear,TRUE,3
+t008,FrenchCavalryMeleeAllowedClear,0,1,french-light-cavalry,4,clear,british-line-infantry,3,clear,TRUE,4
+t009,FrenchCavalryRangedBlocked,0,2,french-light-cavalry,4,clear,british-line-infantry,3,clear,FALSE,0
+t010,FootArtyStandingMultiAt2,0,2,french-foot-artillery,3,clear,british-line-infantry,3,clear,TRUE,3
+t011,FootArtyStandingSingleAt2,0,2,french-foot-artillery,1,clear,british-line-infantry,3,clear,TRUE,2
+t012,HorseArtyMovedMultiMeleeAt1,1,1,french-horse-artillery,3,clear,british-line-infantry,3,clear,TRUE,3
+t013,HorseArtyMovingSingleNotAllowed,1,1,french-horse-artillery,1,clear,british-line-infantry,3,clear,FALSE,0
+t014,HorseArtyStandingOutOfRangeAt4,0,4,french-horse-artillery,3,clear,british-line-infantry,3,clear,FALSE,0
+t015,HorseArtyMovedTwoFireBlockedOverShootCap,2,2,french-horse-artillery,3,clear,british-line-infantry,3,clear,FALSE,0
+t016,HorseArtyMovedOneFireAllowedAtShootCap,1,2,french-horse-artillery,3,clear,british-line-infantry,3,clear,TRUE,2
