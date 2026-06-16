@@ -469,15 +469,36 @@ struct NapoleonicsInfantryCombatEvaluator {
             )
         ]
 
-        applyTerrainModifiers(
+        // Hill-to-hill (and any future special melee) takes precedence over the
+        // standard per-class terrain penalties, exactly as in the infantry path,
+        // so cavalry no longer takes the hill out/into deduction in hill-to-hill
+        // melee.
+        if let special = specialMeleeResolution(
+            context: context,
             attacker: attacker,
+            defender: defender,
             attackerTerrain: attackerTerrain,
-            defenderTerrain: defenderTerrain,
-            verb: "melee",
-            ruleNamespace: "napoleonics.cavalry",
-            modifiers: &modifiers,
-            appliedRules: &appliedRules
-        )
+            defenderTerrain: defenderTerrain
+        ) {
+            appliedRules.append(
+                AppliedRule(ruleID: special.ruleID, title: special.title, outcome: special.outcome)
+            )
+            if special.modifier != 0 {
+                modifiers.append(
+                    CombatModifier(id: UUID(), label: special.title, value: special.modifier, detail: special.detail)
+                )
+            }
+        } else {
+            applyTerrainModifiers(
+                attacker: attacker,
+                attackerTerrain: attackerTerrain,
+                defenderTerrain: defenderTerrain,
+                verb: "melee",
+                ruleNamespace: "napoleonics.cavalry",
+                modifiers: &modifiers,
+                appliedRules: &appliedRules
+            )
+        }
 
         let modifierTotal = modifiers.map(\.value).reduce(0, +)
         let finalDice = max(0, baseDice + modifierTotal)
@@ -572,15 +593,35 @@ struct NapoleonicsInfantryCombatEvaluator {
             )
         ]
 
-        applyTerrainModifiers(
-            attacker: attacker,
-            attackerTerrain: attackerTerrain,
-            defenderTerrain: defenderTerrain,
-            verb: isMelee ? "melee" : "ranged fire",
-            ruleNamespace: isMelee ? "napoleonics.artillery.melee" : "napoleonics.artillery.fire",
-            modifiers: &modifiers,
-            appliedRules: &appliedRules
-        )
+        // Apply hill-to-hill (and any future special) resolution first, matching
+        // the infantry path: melee hill-to-hill = no modifier, ranged
+        // hill-to-hill = -1. Only when there is no special do the standard
+        // per-class terrain penalties apply.
+        let special = isMelee
+            ? specialMeleeResolution(context: context, attacker: attacker, defender: defender,
+                                     attackerTerrain: attackerTerrain, defenderTerrain: defenderTerrain)
+            : specialRangedResolution(context: context, attacker: attacker, defender: defender,
+                                      attackerTerrain: attackerTerrain, defenderTerrain: defenderTerrain)
+        if let special {
+            appliedRules.append(
+                AppliedRule(ruleID: special.ruleID, title: special.title, outcome: special.outcome)
+            )
+            if special.modifier != 0 {
+                modifiers.append(
+                    CombatModifier(id: UUID(), label: special.title, value: special.modifier, detail: special.detail)
+                )
+            }
+        } else {
+            applyTerrainModifiers(
+                attacker: attacker,
+                attackerTerrain: attackerTerrain,
+                defenderTerrain: defenderTerrain,
+                verb: isMelee ? "melee" : "ranged fire",
+                ruleNamespace: isMelee ? "napoleonics.artillery.melee" : "napoleonics.artillery.fire",
+                modifiers: &modifiers,
+                appliedRules: &appliedRules
+            )
+        }
 
         let modifierTotal = modifiers.map(\.value).reduce(0, +)
         let finalDice = max(0, baseDice + modifierTotal)
@@ -732,17 +773,19 @@ struct NapoleonicsInfantryCombatEvaluator {
 
         guard let attackerTerrain, let defenderTerrain else { return nil }
 
-        // Infantry hill-to-hill melee:
-        // no hill deduction when both units are on hill hexes.
-        if attacker.unitClass == .infantry,
-           attackerTerrain.id == "hill",
+        // Hill-to-hill melee (all classes): no terrain-based dice modifier when
+        // both units are on hill hexes. Returning a non-nil special with
+        // modifier 0 also suppresses the normal attacker-out / defender-into
+        // terrain penalties (e.g. cavalry's hill out/into -1), so the only
+        // terrain effect of hill-vs-hill melee is "none".
+        if attackerTerrain.id == "hill",
            defenderTerrain.id == "hill" {
             return SpecialCaseResolution(
                 modifier: 0,
                 ruleID: "napoleonics.melee.hillToHill",
                 title: "Hill-to-hill melee",
                 outcome: "No hill deduction",
-                detail: "Infantry melee from hill to hill does not reduce battle dice."
+                detail: "Melee from hill to hill does not reduce battle dice."
             )
         }
 
@@ -761,17 +804,18 @@ struct NapoleonicsInfantryCombatEvaluator {
 
         guard let attackerTerrain, let defenderTerrain else { return nil }
 
-        // Infantry hill-to-hill ranged fire:
-        // ranged combat from hill to hill reduces dice by 1.
-        if attacker.unitClass == .infantry,
-           attackerTerrain.id == "hill",
+        // Hill-to-hill ranged fire (all classes): firing from hill to hill
+        // reduces dice by exactly 1, replacing the normal attacker-out /
+        // defender-into hill penalties so the net hill-vs-hill ranged effect is
+        // a single -1 regardless of class.
+        if attackerTerrain.id == "hill",
            defenderTerrain.id == "hill" {
             return SpecialCaseResolution(
                 modifier: -1,
                 ruleID: "napoleonics.ranged.hillToHill",
                 title: "Hill-to-hill ranged fire",
                 outcome: "-1 die",
-                detail: "Infantry ranged fire from hill to hill reduces battle dice by 1."
+                detail: "Ranged fire from hill to hill reduces battle dice by 1."
             )
         }
 

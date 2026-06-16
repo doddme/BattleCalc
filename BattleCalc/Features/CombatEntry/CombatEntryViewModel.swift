@@ -48,6 +48,112 @@ final class CombatEntryViewModel: ObservableObject {
     // MARK: Output.
     @Published private(set) var result: CombatResult?
 
+    // MARK: Melee battle-back (only after an allowed melee primary result).
+    // Non-destructive: the primary selections are never rewritten. Battle-back
+    // runs the same evaluator on a reversed context and shows a second result.
+    // `defenderRetreated`: nil until the user answers; true hides battle-back.
+    // `defenderRemainingBlocks`: defender's blocks after losses (when not retreated).
+    // `battleBackResult`: the computed second (reversed) result, or nil.
+    @Published private(set) var defenderRetreated: Bool? { didSet { if defenderRetreated != oldValue { defenderRetreatedDidChange() } } }
+    @Published var defenderRemainingBlocks: Int? { didSet { if defenderRemainingBlocks != oldValue { battleBackResult = nil } } }
+    @Published private(set) var battleBackResult: CombatResult?
+
+    // MARK: - Battle-back gating + actions.
+
+    /// The primary attack resolved as a melee (distance 1) and was allowed.
+    /// Battle-back is a melee-only follow-up, so the controls only appear when
+    /// the original result is an allowed melee.
+    var isPrimaryMelee: Bool {
+        targetDistance == 1 && (result?.validation.isAllowed ?? false)
+    }
+
+    /// Show the "Did the defender Retreat?" controls only after a valid melee
+    /// primary result exists.
+    var showsBattleBackControls: Bool { isPrimaryMelee }
+
+    /// The defender's remaining-blocks bound. The stepper runs 1...original
+    /// defender blocks. We do not allow 0 here: an eliminated unit cannot battle
+    /// back, and the app's unit model has no "eliminated" state, so the lower
+    /// bound is 1 and a fully-destroyed defender is represented by the user
+    /// simply not pressing Battle Back (documented in the report).
+    var defenderBlocksUpperBound: Int { max(1, defenderBlocks ?? defenderMaxBlocks) }
+
+    /// Battle Back is offerable only when the defender did NOT retreat and has
+    /// at least one block remaining.
+    var canBattleBack: Bool {
+        isPrimaryMelee
+            && defenderRetreated == false
+            && (defenderRemainingBlocks ?? 0) >= 1
+    }
+
+    /// Public setter for the retreat answer (the stored property is private(set)
+    /// so the cascade reset stays internal). Setting it triggers the didSet.
+    func setDefenderRetreated(_ value: Bool) { defenderRetreated = value }
+
+    /// Reaction to a new retreat answer: clear any prior battle-back result, and
+    /// when the answer is "No" seed the remaining-blocks stepper at the
+    /// defender's current full block count (the common case is "no losses yet").
+    /// "Yes" (retreated) clears the remaining-blocks input entirely.
+    private func defenderRetreatedDidChange() {
+        battleBackResult = nil
+        if defenderRetreated == false {
+            defenderRemainingBlocks = defenderBlocks ?? defenderMaxBlocks
+        } else {
+            defenderRemainingBlocks = nil
+        }
+    }
+
+    /// Resets the entire battle-back sub-flow. Called whenever an upstream
+    /// primary input changes (via `recompute()`), so a stale battle-back can
+    /// never linger against a changed primary setup.
+    private func resetBattleBack() {
+        if defenderRetreated != nil { defenderRetreated = nil }
+        if defenderRemainingBlocks != nil { defenderRemainingBlocks = nil }
+        if battleBackResult != nil { battleBackResult = nil }
+    }
+
+    /// Runs the battle-back: the original DEFENDER attacks the original ATTACKER
+    /// in melee (distance 1, stationary). Non-destructive — it builds a reversed
+    /// CombatContext and runs the same evaluator into `battleBackResult` without
+    /// touching any primary selection. New attacker = original defender on the
+    /// defender's terrain with the adjusted remaining blocks; new defender =
+    /// original attacker on the attacker's terrain with the original attacker
+    /// blocks. Movement is 0 (the battling-back unit holds its hex).
+    func performBattleBack() {
+        guard canBattleBack, let context = buildBattleBackContext() else { return }
+        battleBackResult = evaluator.evaluate(context: context)
+    }
+
+    /// Reversed context for the battle-back. Mirrors `buildContext()` but swaps
+    /// the two sides, forces melee/distance 1/stationary, and uses the adjusted
+    /// remaining defender blocks as the (new) attacker's block count. Returns nil
+    /// if any field is still missing.
+    func buildBattleBackContext() -> CombatContext? {
+        guard
+            let ac = attackerCountry, let au = attackerUnit,
+            let ab = attackerBlocks, let at = attackerTerrain,
+            let dc = defenderCountry, let du = defenderUnit,
+            let dt = defenderTerrain,
+            let remaining = defenderRemainingBlocks
+        else { return nil }
+
+        // New attacker = original defender; new defender = original attacker.
+        return CombatContext(
+            combatMode: .melee,
+            movedHexes: 0,
+            targetDistance: 1,
+            attackerCountryID: dc.id,
+            attackerUnitID: du.id,
+            attackerBlocks: remaining,
+            attackerTerrainID: dt.id,
+            defenderCountryID: ac.id,
+            defenderUnitID: au.id,
+            defenderBlocks: ab,
+            defenderTerrainID: at.id,
+            attackDirection: .flat
+        )
+    }
+
     // MARK: - Option providers (each section reads these).
     var countryOptions: [CombatPickItem] { CombatEntryCatalog.countries() }
     var attackerClassOptions: [CombatPickItem] { attackerCountry.map { CombatEntryCatalog.classes(in: $0.id) } ?? [] }
@@ -365,9 +471,16 @@ final class CombatEntryViewModel: ObservableObject {
         /// Nil for infantry/cavalry, so their display is unchanged.
         var artilleryBaseDescription: String? = nil
 
+        /// Optional text-only note surfaced in the result section (no numeric
+        /// modifier). Used for the plateau (hill-to-hill melee) rule, which
+        /// applies no terrain dice modifier but should still be explained.
+        var note: String? = nil
+
         /// True when nothing modifies the base, so the UI can collapse to a
         /// single "Melee: Final Dice: N" line. Artillery always shows the
         /// table-derived base, so a present description forces the full layout.
+        /// A note never forces the full layout: it renders alongside the
+        /// collapsed line too.
         var isTrivial: Bool { artilleryBaseDescription == nil && lines.isEmpty && baseBlocks == final }
     }
 
@@ -435,7 +548,51 @@ final class CombatEntryViewModel: ObservableObject {
             lines: lines,
             total: total,
             final: final,
-            artilleryBaseDescription: artilleryBase
+            artilleryBaseDescription: artilleryBase,
+            note: ruleNote(from: r)
+        )
+    }
+
+    /// Display breakdown for the battle-back (reversed) result, or nil when no
+    /// battle-back has been run. Mirrors `resultBreakdown` but is always melee,
+    /// stationary, with the base read off the adjusted remaining defender blocks
+    /// (the battling-back unit's strength). Pure presentation — no combat math.
+    var battleBackBreakdown: ResultBreakdown? {
+        guard let r = battleBackResult else { return nil }
+
+        guard r.validation.isAllowed,
+              let base = r.baseDice,
+              let final = r.finalDice,
+              let blocks = defenderRemainingBlocks
+        else {
+            return ResultBreakdown(
+                isAllowed: r.validation.isAllowed,
+                reasons: r.validation.reasons,
+                mode: "Melee",
+                baseBlocks: defenderRemainingBlocks ?? 0,
+                lines: [], total: 0, final: r.finalDice ?? 0
+            )
+        }
+
+        var lines: [DiceModifierLine] = []
+        let artilleryBase = artilleryBaseDescription(from: r.notes)
+        if artilleryBase == nil {
+            let baseGap = base - blocks
+            if baseGap != 0 {
+                // Battle-back is stationary melee, so a base gap is a plain
+                // adjustment (never the "moved to melee" penalty).
+                lines.append(DiceModifierLine(label: "base adjustment", value: baseGap))
+            }
+        }
+        for m in r.modifiers {
+            lines.append(DiceModifierLine(label: shortModifierLabel(m, isMelee: true), value: m.value))
+        }
+        let total = lines.map(\.value).reduce(0, +)
+        return ResultBreakdown(
+            isAllowed: true, reasons: [], mode: "Melee",
+            baseBlocks: blocks, lines: lines, total: total, final: final,
+            artilleryBaseDescription: artilleryBase,
+            note: ruleNote(from: r)
         )
     }
 
@@ -449,6 +606,17 @@ final class CombatEntryViewModel: ObservableObject {
         let parts = note.dropFirst(marker.count).split(separator: "@")
         guard parts.count == 2, let dice = Int(parts[0]), let dist = Int(parts[1]) else { return nil }
         return "\(dice) at \(dist) hex\(dist == 1 ? "" : "es")"
+    }
+
+    /// Text-only note for a result, derived from the engine's own applied rules
+    /// so it appears exactly when the rule fired (all classes, primary and
+    /// battle-back). Currently surfaces the plateau (hill-to-hill melee) rule,
+    /// which applies no terrain dice modifier but should still be explained.
+    private func ruleNote(from result: CombatResult) -> String? {
+        if result.appliedRules.contains(where: { $0.ruleID == "napoleonics.melee.hillToHill" }) {
+            return "Plateau melee: hill-to-hill, no terrain modifier"
+        }
+        return nil
     }
 
     /// Short, human phrase for one engine modifier. Prefers the terrain name from
@@ -497,6 +665,9 @@ final class CombatEntryViewModel: ObservableObject {
         let upper = max(1, maxTargetDistance)
         if targetDistance > upper { targetDistance = upper; return }
         if targetDistance < 1 { targetDistance = 1; return }
+        // Any change that re-runs the primary engine invalidates a pending
+        // battle-back, so clear its state before producing the new result.
+        resetBattleBack()
         guard let context = buildContext() else { result = nil; return }
         result = evaluator.evaluate(context: context)
     }

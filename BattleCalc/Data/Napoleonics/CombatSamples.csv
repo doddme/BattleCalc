@@ -15,3 +15,8 @@ t013,HorseArtyMovingSingleNotAllowed,1,1,french-horse-artillery,1,clear,british-
 t014,HorseArtyStandingOutOfRangeAt4,0,4,french-horse-artillery,3,clear,british-line-infantry,3,clear,FALSE,0
 t015,HorseArtyMovedTwoFireBlockedOverShootCap,2,2,french-horse-artillery,3,clear,british-line-infantry,3,clear,FALSE,0
 t016,HorseArtyMovedOneFireAllowedAtShootCap,1,2,french-horse-artillery,3,clear,british-line-infantry,3,clear,TRUE,2
+t017,CavalryMeleeHillToHillNoReduction,0,1,french-light-cavalry,4,hill,british-line-infantry,3,hill,TRUE,4
+t018,InfantryMeleeHillToHillNoReduction,0,1,british-line-infantry,4,hill,french-line-infantry,3,hill,TRUE,4
+t019,InfantryRangedHillToHillMinusOne,0,2,british-line-infantry,4,hill,french-line-infantry,3,hill,TRUE,4
+t020,ArtilleryRangedHillToHillMinusOne,0,2,french-foot-artillery,3,hill,british-line-infantry,3,hill,TRUE,2
+t021,ArtilleryMeleeHillToHillNoReduction,0,1,french-horse-artillery,3,hill,british-line-infantry,3,hill,TRUE,3

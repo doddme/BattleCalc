@@ -40,6 +40,9 @@ struct CombatEntryView: View {
                 // `if vm.defenderTerrain != nil { extrasSection }` here and remove
                 // the `targetDistanceRow` call in `attackerSection`.
                 if vm.result != nil { resultSection }
+                // Melee-only follow-up: after an allowed melee result, ask if the
+                // defender retreated and (if not) offer a battle-back.
+                if vm.showsBattleBackControls { battleBackSection }
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Combat")
@@ -250,6 +253,65 @@ struct CombatEntryView: View {
         }
     }
 
+    // MARK: - Battle Back (melee-only follow-up)
+    // Shown only after an allowed melee primary result. Flow:
+    //  1. "Did the defender Retreat?"  No / Yes.
+    //  2. If No: a stepper to set the defender's remaining blocks (losses), then
+    //     a "Battle Back" button. Reducing to the minimum still allows a battle
+    //     back; an eliminated (0-block) defender is modeled by simply not
+    //     battling back (the stepper's lower bound is 1 — see the view model).
+    //  3. Battle Back runs the reversed melee (original defender → original
+    //     attacker) and shows its dice below.
+    // If Yes (retreated): no battle-back is offered.
+    @ViewBuilder private var battleBackSection: some View {
+        Section("Battle Back") {
+            HStack {
+                Text("Did the defender Retreat?")
+                Spacer()
+                Button("No")  { vm.setDefenderRetreated(false) }
+                    .buttonStyle(.bordered)
+                    .tint(vm.defenderRetreated == false ? .accentColor : nil)
+                Button("Yes") { vm.setDefenderRetreated(true) }
+                    .buttonStyle(.bordered)
+                    .tint(vm.defenderRetreated == true ? .accentColor : nil)
+            }
+
+            if vm.defenderRetreated == true {
+                Text("Defender retreated — no battle back.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else if vm.defenderRetreated == false {
+                // Defender's remaining blocks after losses. Bounded 1...original
+                // (0 = eliminated is represented by not pressing Battle Back).
+                let upper = vm.defenderBlocksUpperBound
+                Stepper(value: Binding(get: { vm.defenderRemainingBlocks ?? upper },
+                                       set: { vm.defenderRemainingBlocks = $0 }), in: 1...upper) {
+                    LabeledContent("Defender blocks remaining",
+                                   value: "\(vm.defenderRemainingBlocks ?? upper) / \(upper)")
+                }
+                Text("Set the defender's surviving blocks, then battle back. If the defender is eliminated, it cannot battle back.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                Button("Battle Back") { vm.performBattleBack() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!vm.canBattleBack)
+
+                if let b = vm.battleBackBreakdown {
+                    if b.isAllowed {
+                        Text("Defender battles back (melee, 1 hex):")
+                            .font(.caption).foregroundStyle(.secondary)
+                        ResultBreakdownView(breakdown: b)
+                    } else {
+                        Label("Battle back not allowed", systemImage: "xmark.octagon")
+                            .foregroundStyle(.red)
+                        ForEach(b.reasons, id: \.self) { reason in
+                            Text(reason).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - DEBUG bar (compile-time gated)
     @ViewBuilder private var debugBar: some View {
         #if DEBUG
@@ -280,12 +342,21 @@ struct ResultBreakdownView: View {
 
     var body: some View {
         if breakdown.isTrivial {
-            // No modifiers and base == final: one line is enough.
-            HStack(spacing: 0) {
-                Text("\(breakdown.mode): Final Dice: ")
-                Text("\(breakdown.final)").bold()
+            // No modifiers and base == final: one line is enough, plus any
+            // text-only rule note (e.g. the plateau hill-to-hill explanation).
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 0) {
+                    Text("\(breakdown.mode): Final Dice: ")
+                    Text("\(breakdown.final)").bold()
+                }
+                .font(.subheadline)
+                if let note = breakdown.note {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .font(.subheadline)
         } else {
             VStack(alignment: .leading, spacing: 2) {
                 // Artillery shows a table-derived base ("Base Dice: 3 at 2 hexes");
@@ -323,6 +394,13 @@ struct ResultBreakdownView: View {
                 }
                 .font(.subheadline)
                 .padding(.top, 1)
+
+                if let note = breakdown.note {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
