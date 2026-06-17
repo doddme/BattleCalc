@@ -18,12 +18,14 @@ struct CombatPickItem: Identifiable, Hashable {
     let title: String
     let subtitle: String?
     let imageName: String?
+    let colorKey: String?
 
-    init(id: String, title: String, subtitle: String? = nil, imageName: String? = nil) {
+    init(id: String, title: String, subtitle: String? = nil, imageName: String? = nil, colorKey: String? = nil) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.imageName = imageName
+        self.colorKey = colorKey
     }
 }
 

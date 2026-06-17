@@ -49,6 +49,7 @@ enum MovingFireRule: String, Codable, CaseIterable, Hashable {
 enum MeleeRule: String, Codable, CaseIterable, Hashable {
     case currentBlocks
     case currentBlocksPlusOne
+    case currentBlocksPlusTwo
     case currentBlocksMinusOneIfMoved
 }
 

@@ -20,3 +20,4 @@ t018,InfantryMeleeHillToHillNoReduction,0,1,british-line-infantry,4,hill,french-
 t019,InfantryRangedHillToHillMinusOne,0,2,british-line-infantry,4,hill,french-line-infantry,3,hill,TRUE,4
 t020,ArtilleryRangedHillToHillMinusOne,0,2,french-foot-artillery,3,hill,british-line-infantry,3,hill,TRUE,2
 t021,ArtilleryMeleeHillToHillNoReduction,0,1,french-horse-artillery,3,hill,british-line-infantry,3,hill,TRUE,3
+t999,FrenchOldGuardMeleePlusTwo,0,1,french-old-guard,4,clear,british-light-cavalry,3,clear,TRUE,6

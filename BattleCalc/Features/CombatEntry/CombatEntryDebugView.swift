@@ -39,8 +39,8 @@ struct CombatEntryDebugView: View {
                 LabeledContent("Mode", value: c.combatMode == .melee ? "Melee" : "Ranged")
                 LabeledContent("Target distance", value: c.targetDistance.map(String.init) ?? "—")
                 LabeledContent("Moved hexes", value: c.movedHexes.map(String.init) ?? "—")
-                LabeledContent("Attacker", value: "\(c.attackerUnitID) · \(c.attackerBlocks) blk · \(c.attackerTerrainID ?? "clear")")
-                LabeledContent("Defender", value: "\(c.defenderUnitID) · \(c.defenderBlocks) blk · \(c.defenderTerrainID ?? "clear")")
+                LabeledContent("Attacker", value: "\(c.attackerUnitID) · \(c.attackerBlocks) blk · \(c.attackerTerrainID ?? "Clear")")
+                LabeledContent("Defender", value: "\(c.defenderUnitID) · \(c.defenderBlocks) blk · \(c.defenderTerrainID ?? "Clear")")
             } else {
                 Text("No complete battle entered yet.").foregroundStyle(.secondary)
             }
@@ -63,7 +63,7 @@ struct CombatEntryDebugView: View {
     }
 
     @ViewBuilder private var smokeTestSection: some View {
-        Section("Smoke test — CombatSamples.csv") {
+        Section("Smoke test — NapoleonicsCombatSamples.csv") {
             // Reuse the existing CSV-backed smoke-test screen unchanged.
             NavigationLink("Run smoke test") {
                 NapoleonicsCombatDebugView()

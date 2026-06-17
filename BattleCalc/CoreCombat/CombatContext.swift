@@ -24,6 +24,31 @@ enum AttackDirection: String, Codable, CaseIterable, Hashable {
     case downhill
 }
 
+/// Leader support available to a unit for the current combat.
+/// Adjacent leaders can affect Close Combat hit symbols, while attached leaders
+/// can also affect morale and some follow-up combat reminders.
+enum CombatLeaderSupport: String, Codable, CaseIterable, Hashable {
+    case none
+    case adjacent
+    case attached
+
+    var title: String {
+        switch self {
+        case .none: return "No leader"
+        case .adjacent: return "Adjacent leader"
+        case .attached: return "Attached leader"
+        }
+    }
+
+    var summary: String? {
+        switch self {
+        case .none: return nil
+        case .adjacent: return "Leader adjacent"
+        case .attached: return "Leader attached"
+        }
+    }
+}
+
 /// Full input state for one combat calculation request.
 /// This is the runtime object built from the user's choices on screen.
 /// Later, the rules engine will read this object and produce a CombatResult.
@@ -53,7 +78,18 @@ struct CombatContext: Codable, Hashable {
     var defenderBlocks: Int
     var defenderTerrainID: String?
 
+    /// Leader support selected for each side in this combat.
+    var attackerLeaderSupport: CombatLeaderSupport = .none
+    var defenderLeaderSupport: CombatLeaderSupport = .none
+
+    /// Whether the defender is supported for morale in this combat.
+    var defenderSupported: Bool = false
+
     /// Direction matters for certain terrain interactions,
     /// such as attacks involving hills or other protected positions.
     var attackDirection: AttackDirection?
+
+    /// True when this context represents a defender Battle Back rather than the
+    /// original ordered attack. Some rulesets use different dice in Battle Back.
+    var isBattleBack: Bool = false
 }

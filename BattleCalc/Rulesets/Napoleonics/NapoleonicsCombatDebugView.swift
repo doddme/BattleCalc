@@ -212,3 +212,114 @@ struct NapoleonicsCombatDebugView: View {
         }
     }
 }
+
+
+#if DEBUG
+struct NapoleonicsDataDebugView: View {
+    private let units = NapoleonicsUnitLibrary.all
+    private let terrains = NapoleonicsTerrainLibrary.all
+    private let sampleReport = NapoleonicsCombatSampleRunner.runAll()
+
+    var body: some View {
+        NavigationStack {
+            List {
+                summarySection
+                smokeTestSection
+                unitClassSection
+                terrainSection
+            }
+            .navigationTitle("Napoleonics Data")
+        }
+    }
+
+    private var summarySection: some View {
+        Section("Loaded CSV Data") {
+            LabeledContent("Units", value: "\(units.count)")
+            LabeledContent("Terrain", value: "\(terrains.count)")
+            LabeledContent("Combat samples", value: "\(sampleReport.totalCount)")
+        }
+    }
+
+    private var smokeTestSection: some View {
+        Section("Smoke Tests") {
+            LabeledContent("Result", value: sampleReport.allPassed ? "Passed" : "Failed")
+            LabeledContent("Passed", value: "\(sampleReport.passedCount) / \(sampleReport.totalCount)")
+            LabeledContent("Failed", value: "\(sampleReport.failures.count)")
+
+            ForEach(sampleReport.failures.prefix(8)) { failure in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(failure.sample.id): \(failure.sample.name)")
+                        .font(.headline)
+                    ForEach(failure.mismatches, id: \.self) { mismatch in
+                        Text(mismatch)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private var unitClassSection: some View {
+        Section("Units by Class") {
+            ForEach(unitClassCounts, id: \.name) { entry in
+                LabeledContent(entry.name, value: "\(entry.count)")
+            }
+        }
+    }
+
+    private var terrainSection: some View {
+        Section("Terrain") {
+            ForEach(terrains.sorted { $0.name < $1.name }) { terrain in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(terrain.name)
+                        .font(.headline)
+                    Text(terrainDetail(for: terrain))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private var unitClassCounts: [(name: String, count: Int)] {
+        let grouped = Dictionary(grouping: units, by: { $0.unitClass.rawValue })
+        return grouped
+            .map { (name: titleCase($0.key), count: $0.value.count) }
+            .sorted { $0.name < $1.name }
+    }
+
+    private func terrainDetail(for terrain: TerrainDefinition) -> String {
+        var parts: [String] = []
+
+        if terrain.blocksLineOfSight {
+            parts.append("blocks LOS")
+        }
+        if terrain.blocksBattleOnEntry {
+            parts.append("blocks battle on entry")
+        }
+        if terrain.infantryIntoPenalty != 0 {
+            parts.append("infantry into \(terrain.infantryIntoPenalty)")
+        }
+        if terrain.cavalryIntoPenalty != 0 {
+            parts.append("cavalry into \(terrain.cavalryIntoPenalty)")
+        }
+        if terrain.artilleryIntoPenalty != 0 {
+            parts.append("artillery into \(terrain.artilleryIntoPenalty)")
+        }
+
+        return parts.isEmpty ? "No terrain limits recorded" : parts.joined(separator: " · ")
+    }
+
+    private func titleCase(_ id: String) -> String {
+        id
+            .split(separator: "-")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
+}
+#endif
+
+

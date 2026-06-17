@@ -60,7 +60,7 @@ enum CombatSampleLoadError: Error, LocalizedError {
 enum NapoleonicsCombatSampleLoader {
 
     static func loadSamples() throws -> [NapoleonicsCombatSample] {
-        let fileName = "CombatSamples"
+        let fileName = "NapoleonicsCombatSamples"
         let fileExtension = "csv"
 
         guard let url = Bundle.main.url(forResource: fileName, withExtension: fileExtension) else {
