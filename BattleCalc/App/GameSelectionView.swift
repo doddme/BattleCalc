@@ -31,10 +31,10 @@ struct GameSelectionView: View {
                 } header: {
                     Text("Choose Game")
                 } footer: {
-                    Text("BattleCalc uses the selected game to choose the right units, terrain, rules, and explanations.")
+                    Text("DiceCalc uses the selected game to choose the right units, terrain, rules, and explanations.")
                 }
             }
-            .navigationTitle("BattleCalc")
+            .navigationTitle("DiceCalc")
             #if DEBUG
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
