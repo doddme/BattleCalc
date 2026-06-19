@@ -12,7 +12,7 @@ import SwiftUI
 // can ask for colors by meaning instead of repeating raw RGB values.
 extension Color {
     
-    ///THIS IS A TEST SHOULD BE IN DEV////
+    ///THIS IS A TEST SHOULD BE IN DEV and QA////
     
     // France
     static let battleCalcFrenchBlue = Color(
