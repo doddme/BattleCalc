@@ -13,6 +13,11 @@ protocol GameRuleSet {
     var system: GameSystem { get }
     var displayName: String { get }
     var isSelectable: Bool { get }
-
+    var supportsTerrainImages: Bool { get }
+    var supportsUnitImages: Bool { get }
     func resolveCombat(_ context: CombatContext) -> CombatResult
+}
+extension GameRuleSet {
+    var supportsTerrainImages: Bool { false }
+    var supportsUnitImages: Bool { false }
 }
