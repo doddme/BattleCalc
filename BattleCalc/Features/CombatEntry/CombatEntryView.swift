@@ -12,6 +12,12 @@
 import SwiftUI
 
 struct CombatEntryView: View {
+    let onChangeGame: (() -> Void)?
+
+    init(onChangeGame: (() -> Void)? = nil) {
+        self.onChangeGame = onChangeGame
+    }
+
     @StateObject private var vm = CombatEntryViewModel()
     // Once a unit type is chosen, that side collapses to a single colored
     // unit-type summary row. Tapping the summary flips the matching flag back on
@@ -20,8 +26,11 @@ struct CombatEntryView: View {
     @State private var editingDefender = false
     // Battle-wide extras (range/mode) collapse into a compact summary too.
     @State private var editingExtras = false
+    @State private var showChangeGameConfirmation = false
     #if DEBUG
     @State private var showDebug = false
+    @State private var showNapoleonicsDataDebug = false
+    @State private var showAncientsDataDebug = false
     #endif
 
     var body: some View {
@@ -46,10 +55,40 @@ struct CombatEntryView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Combat")
-            .safeAreaInset(edge: .bottom) { debugBar }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        if onChangeGame != nil {
+                            Button("Change Game") { showChangeGameConfirmation = true }
+                        }
+                        #if DEBUG
+                        Button("Napoleonics Data") { showNapoleonicsDataDebug = true }
+                        Button("Ancients Data") { showAncientsDataDebug = true }
+                        Button("Debug") { showDebug = true }
+                        #endif
+                    } label: {
+                        Label("More", systemImage: "ellipsis.circle")
+                    }
+                }
+            }
+            .alert("Change game?", isPresented: $showChangeGameConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Change Game", role: .destructive) { onChangeGame?() }
+            } message: {
+                Text("This will leave the current combat entry screen and return to game selection.")
+            }
+            // Debug bar temporarily hidden for playtesting.
+            // To restore it, uncomment the safeAreaInset below.
+            // .safeAreaInset(edge: .bottom) { debugBar }
             #if DEBUG
             .sheet(isPresented: $showDebug) {
                 CombatEntryDebugView(trace: vm.lastTrace, context: vm.buildContext())
+            }
+            .sheet(isPresented: $showNapoleonicsDataDebug) {
+                NapoleonicsDataDebugView()
+            }
+            .sheet(isPresented: $showAncientsDataDebug) {
+                AncientsDataDebugView()
             }
             #endif
         }
@@ -429,6 +468,19 @@ struct CombatPickRowContent: View {
                     Text(sub).font(.caption).foregroundStyle(.secondary)
                 }
             }
+        }
+        .padding(.vertical, item.colorKey == nil ? 0 : 6)
+        .padding(.horizontal, item.colorKey == nil ? 0 : 8)
+        .background(unitColor(for: item.colorKey).opacity(item.colorKey == nil ? 0 : 0.22))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func unitColor(for key: String?) -> Color {
+        switch key?.lowercased() {
+        case "green": return .green
+        case "blue": return .blue
+        case "red": return .red
+        default: return .clear
         }
     }
 }

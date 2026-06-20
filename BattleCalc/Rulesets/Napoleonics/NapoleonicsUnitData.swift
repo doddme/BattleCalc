@@ -89,7 +89,7 @@ enum UnitLoadError: Error, LocalizedError {
 enum NapoleonicsUnitCSVLoader {
 
     static func loadUnitDefinitions() throws -> [UnitDefinition] {
-        let fileName = "Units"
+        let fileName = "NapoleonicsUnits"
         let fileExtension = "csv"
 
         guard let url = Bundle.main.url(forResource: fileName, withExtension: fileExtension) else {
@@ -373,7 +373,7 @@ enum NapoleonicsUnitLibrary {
             let units = try NapoleonicsUnitCSVLoader.loadUnitDefinitions()
             return Dictionary(uniqueKeysWithValues: units.map { ($0.id, $0) })
         } catch {
-            print("Failed to load Units.csv: \(error.localizedDescription)")
+            print("Failed to load NapoleonicsUnits.csv: \(error.localizedDescription)")
             return [:]
         }
     }()

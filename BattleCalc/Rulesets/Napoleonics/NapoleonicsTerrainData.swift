@@ -69,7 +69,7 @@ enum TerrainLoadError: Error, LocalizedError {
 enum NapoleonicsTerrainCSVLoader {
 
     static func loadTerrainDefinitions() throws -> [TerrainDefinition] {
-        let fileName = "Terrain"
+        let fileName = "NapoleonicsTerrain"
         let fileExtension = "csv"
 
         guard let url = Bundle.main.url(forResource: fileName, withExtension: fileExtension) else {
@@ -223,7 +223,7 @@ enum NapoleonicsTerrainLibrary {
             let terrains = try NapoleonicsTerrainCSVLoader.loadTerrainDefinitions()
             return Dictionary(uniqueKeysWithValues: terrains.map { ($0.id, $0) })
         } catch {
-            print("Failed to load Terrain.csv: \(error.localizedDescription)")
+            print("Failed to load NapoleonicsTerrain.csv: \(error.localizedDescription)")
             return [:]
         }
     }()

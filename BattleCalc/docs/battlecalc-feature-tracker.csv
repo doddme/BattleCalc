@@ -1,0 +1,14 @@
+ID,Area,Type,Title,Status,ReadyForTest,Build,Priority,Notes,TesterText
+BC-001,Ancients,Feature,Defender support reminder row,Done,Yes,2,High,Adds supported/not supported reminder flow without changing dice.,Verify defender support reminder appears only when relevant and does not change dice.
+BC-002,Ancients,Feature,Leader reminder row and attached leader info,Done,Yes,2,High,Leader effects shown as reminders rather than dice modifiers.,Verify leader reminders are clear and only show for valid leader states.
+BC-003,Ancients,Feature,Momentum Advance follow-up reminder,Done,Yes,2,Medium,After Close Combat section guides momentum advance flow.,Verify Momentum Advance reminder appears after close combat and reads clearly.
+BC-004,Ancients,Feature,Evade guidance reminder,Planned,No,,Medium,Reminder only; no board-state legality enforcement yet.,Check that evade reminder text is understandable and appears in the right situations.
+BC-005,Ancients,Fix,Align combat entry flow with Napoleonics,Done,Yes,2,High,Progressive disclosure and summary-row behavior now matches the Napoleonics pattern more closely.,Verify Ancients combat entry now feels consistent with Napoleonics and reduces clutter.
+BC-006,Napoleonics,Fix,Melee result explanation breakdown,Done,Yes,2,High,"Shows base dice, modifiers, and final dice more clearly.","Verify melee explanations show base dice, modifiers, and final dice correctly."
+BC-007,Release,Task,Prepare TestFlight metadata and external testing,Done,Yes,2,High,"App record created, build uploaded, external testing info entered.",Confirm TestFlight invitation and build availability for external testers.
+BC-008,Release,Task,Next tester build checklist note,Done,Yes,2,Low,Local markdown note created with upload and tester steps.,Review local upload checklist and confirm it matches the current TestFlight flow.
+BC-009,General,Idea,Generate tester release notes from checked items,Planned,No,,Medium,Use rows marked ReadyForTest=Yes from current build to draft tester text.,Use completed rows to produce concise tester notes for the next build.
+BC-010,Napoleonics,idea,Leader reminder row and attached leader info,Planned,No,,,,
+BC-011,Napoleonics,Idea,How many retreats to ignore,,,,,,
+BC-012,Napoleonics,idea,Lancer - the ReRoll info on Flags - give the user how this is used,,,,,,
+BC-013,Napoleonics,Idea,Curassier ignoring swords from infantry INFO only notes,,,,,,

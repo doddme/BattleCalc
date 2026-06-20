@@ -1,0 +1,7 @@
+id,name,movedHexes,targetDistance,attackerUnitID,attackerBlocks,attackerTerrainID,defenderUnitID,defenderBlocks,defenderTerrainID,expectedAllowed,expectedFinalDice
+a001,LightInfFireForestCap1,0,3,light-bow-infantry,4,clear,heavy-infantry,4,forest,TRUE,1
+a002,MediumInfMeleeIntoForestCap2,0,1,medium-infantry,4,clear,warrior-infantry,4,forest,TRUE,2
+a003,LCFireAfterMoveCap1,1,2,light-cavalry,3,clear,medium-infantry,4,clear,TRUE,1
+a004,ElephantVsHeavyInfSameDice,0,1,elephant,2,clear,heavy-infantry,4,clear,TRUE,5
+a005,WarriorFullStrength4Dice,0,1,warrior-infantry,4,clear,medium-infantry,4,clear,TRUE,4
+a006,WarriorAfterLoss3Dice,0,1,warrior-infantry,3,clear,medium-infantry,4,clear,TRUE,3
