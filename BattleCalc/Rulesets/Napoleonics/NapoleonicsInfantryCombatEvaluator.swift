@@ -910,6 +910,9 @@ struct NapoleonicsInfantryCombatEvaluator {
         case .currentBlocksPlusOne:
             return currentBlocks + 1
 
+        case .currentBlocksPlusTwo:
+            return currentBlocks + 2
+
         case .currentBlocksMinusOneIfMoved:
             return max(0, currentBlocks - (movedThisTurn ? 1 : 0))
 
@@ -930,6 +933,9 @@ struct NapoleonicsInfantryCombatEvaluator {
 
         case .currentBlocksPlusOne:
             return "Current blocks plus 1: \(currentBlocks) -> \(result) dice"
+
+        case .currentBlocksPlusTwo:
+            return "Current blocks plus 2: \(currentBlocks) -> \(result) dice"
 
         case .currentBlocksMinusOneIfMoved:
             let countryName = unit.countryID.capitalized
