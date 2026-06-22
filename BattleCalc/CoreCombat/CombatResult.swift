@@ -58,4 +58,7 @@ struct CombatResult: Codable, Hashable {
 
     /// Human-readable explanation trace for how the result was built.
     var appliedRules: [AppliedRule]
+    
+    /// This is for other information about the unit that can be passed back to the view - starting with ignoredFlags
+    //var unitReminders: [String]   ///moved to combatentryviewmodel instead since it already has all this
 }

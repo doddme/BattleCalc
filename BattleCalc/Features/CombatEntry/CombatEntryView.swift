@@ -305,7 +305,7 @@ struct CombatEntryView: View {
     @ViewBuilder private var battleBackSection: some View {
         Section("Battle Back") {
             HStack {
-                Text("Did the defender Retreat?")
+                Text("Did the Defender Retreat?")
                 Spacer()
                 Button("No")  { vm.setDefenderRetreated(false) }
                     .buttonStyle(.bordered)
@@ -316,7 +316,7 @@ struct CombatEntryView: View {
             }
 
             if vm.defenderRetreated == true {
-                Text("Defender retreated — no battle back.")
+                Text("Defender Retreated — NO Battle Back.")
                     .font(.caption).foregroundStyle(.secondary)
             } else if vm.defenderRetreated == false {
                 // Defender's remaining blocks after losses. Bounded 1...original
@@ -327,7 +327,7 @@ struct CombatEntryView: View {
                     LabeledContent("Defender blocks remaining",
                                    value: "\(vm.defenderRemainingBlocks ?? upper) / \(upper)")
                 }
-                Text("Set the defender's surviving blocks, then battle back. If the defender is eliminated, it cannot battle back.")
+                Text("Important: Update the defender's block strength, then battle back. If the defender is eliminated, it cannot battle back.")
                     .font(.caption).foregroundStyle(.secondary)
 
                 Button("Battle Back") { vm.performBattleBack() }
@@ -395,6 +395,12 @@ struct ResultBreakdownView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if let reminder = breakdown.unitReminder {
+                    Text(reminder)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         } else {
             VStack(alignment: .leading, spacing: 2) {
@@ -440,8 +446,16 @@ struct ResultBreakdownView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                
+                if let reminder = breakdown.unitReminder {
+                    Text(reminder)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
+   
     }
 }
 

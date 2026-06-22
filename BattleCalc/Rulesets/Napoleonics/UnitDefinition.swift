@@ -161,5 +161,7 @@ struct UnitDefinition: Identifiable, Codable, Hashable {
     var maxBlocks: Int
     var hasSaber: Bool
     var combatProfile: UnitCombatProfile
+    var ignoreFlags: Int // Added to let players know some units can ignore multiple flags
+   
     var notes: [String] = []
 }

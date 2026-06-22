@@ -4,10 +4,11 @@ This is a quick reminder of how to use Git for BattleCalc so you don’t have to
 
 ## Branches
 
-- **main**: Stable baseline.
+- **main**: Stable baseline will be the approved Apple App once we have users testing
 - **dev**: Active development.
-- **qa**: Testing branch.
-- **ancients-integration-checkpoint**: Ancients work branch.
+- **qa**: Testing branch, goes to Apple with a new branch once sent
+- **ancients-integration-checkpoint**: THIS IS WHAT WAS SUBMITTED TO Apple Appstore TestFlight
+
 
 ## Everyday workflow in Xcode
 
@@ -42,6 +43,19 @@ If Git asks for a password
 •	Password: your classic GitHub personal access token (PAT) with  repo  scope.
 If  git push  says  Everything up-to-date , it means your branch is already in sync with GitHub.
 ```
+
+## Editing EXISTING files only then
+```bash
+git commit -a -m "message"
+```
+
+
+## Editing NEW and EXISTING files then
+```bash
+git add -A
+git commit -m "Short, clear message"
+```
+
 ## Checking branches
 ```bash
 cd /Users/mikedodd/Documents/BattleCalc
@@ -49,9 +63,14 @@ cd /Users/mikedodd/Documents/BattleCalc
 git branch          # list local branches
 git status          # shows current branch at top
 ```
+
+
 ## Safety reminder
-•	Before doing anything risky (like big refactors), make sure:
-•	 git status  shows  working tree clean , and
-•	 git push  says  Everything up-to-date .
-•	That means your work is safely backed up on GitHub.
+•	**Before doing anything risky** (like big refactors), make sure:  
+
+•	 **`git status`**  shows  working tree clean.  
+•	 **`git push`**  says  Everything up-to-date .   
+
+That means your work is safely backed up on GitHub.
+
 

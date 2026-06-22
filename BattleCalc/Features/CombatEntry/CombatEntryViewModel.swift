@@ -202,6 +202,11 @@ final class CombatEntryViewModel: ObservableObject {
     // The distance row must adapt to the attacker's class: cavalry is melee-only
     // (locked to 1), artillery's max comes from its *active* fire table (which
     // depends on moved + blocks), and infantry keeps the fixed 1...4.
+    
+    private var defenderUnitDefinition: UnitDefinition? {
+        defenderUnit.flatMap { NapoleonicsUnitLibrary.unit(for: $0.id) }
+    }
+    
     private var attackerUnitDefinition: UnitDefinition? {
         attackerUnit.flatMap { NapoleonicsUnitLibrary.unit(for: $0.id) }
     }
@@ -465,6 +470,9 @@ final class CombatEntryViewModel: ObservableObject {
         let lines: [DiceModifierLine] // ordered signed modifier lines
         let total: Int                // sum of all line values
         let final: Int
+        
+        /// unitReminder is a way to show the use information about that unit.
+        var unitReminder: String? = nil
 
         /// Artillery base is table-derived, not a block count. When set, the UI
         /// shows "Base Dice: 3 at 2 hexes" instead of "Base Dice: N blocks".
@@ -500,13 +508,16 @@ final class CombatEntryViewModel: ObservableObject {
                 reasons: r.validation.reasons,
                 mode: targetDistance == 1 ? "Melee" : "Ranged",
                 baseBlocks: attackerBlocks ?? 0,
-                lines: [], total: 0, final: r.finalDice ?? 0
+                lines: [], total: 0, final: r.finalDice ?? 0,
+                ///Added to alert users about ignored flags by defender
+                unitReminder: ignoreFlagsReminder(for: defenderUnitDefinition)
             )
         }
 
         let isMelee = targetDistance == 1
         var lines: [DiceModifierLine] = []
-
+        
+      
         // Artillery base is table-derived (e.g. "3 at 2 hexes"), so the
         // base-vs-blocks gap line below does not apply — the raw block count is
         // not the base for artillery. For infantry/cavalry this is nil.
@@ -548,8 +559,11 @@ final class CombatEntryViewModel: ObservableObject {
             lines: lines,
             total: total,
             final: final,
+            ///Added to alert users about ignored flags by defender
+            unitReminder: ignoreFlagsReminder(for: defenderUnitDefinition),
             artilleryBaseDescription: artilleryBase,
-            note: ruleNote(from: r)
+            note: ruleNote(from: r),
+           
         )
     }
 
@@ -591,6 +605,7 @@ final class CombatEntryViewModel: ObservableObject {
         return ResultBreakdown(
             isAllowed: true, reasons: [], mode: "Melee",
             baseBlocks: blocks, lines: lines, total: total, final: final,
+            unitReminder: ignoreFlagsReminder(for: attackerUnitDefinition),
             artilleryBaseDescription: artilleryBase,
             note: ruleNote(from: r)
         )
@@ -607,6 +622,13 @@ final class CombatEntryViewModel: ObservableObject {
         guard parts.count == 2, let dice = Int(parts[0]), let dist = Int(parts[1]) else { return nil }
         return "\(dice) at \(dist) hex\(dist == 1 ? "" : "es")"
     }
+    
+    /// Text only note as a tool for users to see info about the ability to ignore flags
+    private func ignoreFlagsReminder(for unit: UnitDefinition?) -> String? {
+        guard let flags = unit?.ignoreFlags, flags > 0 else { return "This defender cannot ignore any flags on their own without support or attached leader." }
+        return "Defender may ignore \(flags) flag\(flags == 1 ? "" : "s")."
+    }
+
 
     /// Text-only note for a result, derived from the engine's own applied rules
     /// so it appears exactly when the rule fired (all classes, primary and
