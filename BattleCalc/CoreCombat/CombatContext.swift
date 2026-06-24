@@ -83,6 +83,11 @@ struct CombatContext: Codable, Hashable {
     /// When true, the artillery attack may add melee dice from one supporting
     /// adjacent ordered unit.
     var isCombinedAttack: Bool = false
+    
+    // Country of the supporting unit in a combined artillery attack.
+    /// This is separate from the artillery attacker's country because allied
+    /// infantry/cavalry may support artillery from another nation.
+    var supportingUnitCountryID: String? = nil
 
     /// Optional supporting unit identity for a combined artillery attack.
     var supportingUnitID: String? = nil
@@ -104,6 +109,7 @@ struct CombatContext: Codable, Hashable {
     /// moved into melee, not on how many hexes it moved.
     var supportingUnitMovedIntoMelee: Bool = false
 
+  
 
     /////////////////////////////////////////////
     

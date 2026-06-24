@@ -58,6 +58,7 @@ struct CombatEntryDebugView: View {
                     LabeledContent("Supporting unit", value: c.supportingUnitID ?? "—")
                     LabeledContent("Supporting blocks", value: c.supportingUnitBlocks.map(String.init) ?? "—")
                     LabeledContent("Supporting terrain", value: c.supportingUnitTerrainID ?? "—")
+                    LabeledContent("Supporting Country", value: c.supportingUnitCountryID ?? "—")
                     LabeledContent("Supporting in square", value: c.supportingUnitInSquare ? "Yes" : "No")
                     LabeledContent("Support moved into melee", value: c.supportingUnitMovedIntoMelee ? "Yes" : "No")
                 }
@@ -76,11 +77,13 @@ struct CombatEntryDebugView: View {
     private var showsNapoleonicsCombinedAttackDebug: Bool {
         guard let c = context else { return false }
 
-        return c.attackerUnitID.hasPrefix("nap.")
-            || c.defenderUnitID.hasPrefix("nap.")
-            || (c.attackerTerrainID?.hasPrefix("nap.") ?? false)
-            || (c.defenderTerrainID?.hasPrefix("nap.") ?? false)
-            || (c.supportingUnitID?.hasPrefix("nap.") ?? false)
+        return c.isCombinedAttack
+            || c.supportingUnitID != nil
+            || c.supportingUnitBlocks != nil
+            || c.supportingUnitTerrainID != nil
+            || c.supportingUnitCountryID != nil
+            || c.supportingUnitInSquare
+            || c.supportingUnitMovedIntoMelee
     }
 
     

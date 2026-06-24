@@ -40,25 +40,6 @@ struct NapoleonicsInfantryCombatEvaluator {
                 ruleID: "napoleonics.lookup.missingDefender"
             )
         }
-        //Removed June 22 2026 noon because I'm moving to the CombatEntryViewModel
-        //let ignoreFlagsString = ignoreFlagMessage(for: defender)
-        //if !ignoreFlagsString.isEmpty {
-        //    unitReminders.append(ignoreFlagsString)
-        //}
-        ////
-        ////
-        ////if !result.unitReminders.isEmpty {
-        ////Section("Unit reminders") {
-        ////    ForEach(result.unitReminders, id: \.self) { reminder in
-        ////        Text(reminder)
-        ////            .font(.footnote)
-        ////            .foregroundStyle(.secondary)
-        ////       }
-        ////   }
-        ////}
-        ////
-        
-        
         
         return evaluateResolvedUnits(
             context: context,
@@ -653,7 +634,8 @@ struct NapoleonicsInfantryCombatEvaluator {
                 supportingUnitTerrainID: context.supportingUnitTerrainID,
                 defenderTerrainID: context.defenderTerrainID,
                 supportingUnitInSquare: context.supportingUnitInSquare,
-                supportingUnitMovedIntoMelee: context.supportingUnitMovedIntoMelee
+                supportingUnitMovedIntoMelee: context.supportingUnitMovedIntoMelee,
+                supportingUnitCountryID: context.supportingUnitCountryID
             )
 
 
@@ -732,7 +714,8 @@ struct NapoleonicsInfantryCombatEvaluator {
         supportingUnitTerrainID: String?,
         defenderTerrainID: String?,
         supportingUnitInSquare: Bool,
-        supportingUnitMovedIntoMelee: Bool
+        supportingUnitMovedIntoMelee: Bool,
+        supportingUnitCountryID: String?
     ) -> CombinedArtilleryBonus {
 
         let supportingTerrain = NapoleonicsTerrainLibrary.terrain(for: supportingUnitTerrainID)
@@ -748,29 +731,29 @@ struct NapoleonicsInfantryCombatEvaluator {
                 baseBonusDice = 1
                 outcome = "Supporting infantry is in square, so it contributes 1 die in the combined attack."
             } else {
-                // Supporting-unit movement is a simple yes/no state here.
-                // For support melee rules that care about "moved into melee",
-                // pass 1 when true and 0 when false so the existing melee helper
-                // can keep using its current movedHexes-based pattern.
-                let supportMovedHexes = supportingUnitMovedIntoMelee ? 1 : 0
-
+                // Combined-attack support handles the Spanish moved-into-melee
+                // penalty separately below so the support breakdown can show the
+                // true base dice first, then the explicit -1 adjustment.
                 baseBonusDice = meleeBaseDice(
                     for: supportingUnit,
                     currentBlocks: supportingUnitBlocks,
-                    movedHexes: supportMovedHexes
+                    movedHexes: 0
                 )
                 outcome = meleeBaseExplanation(
                     for: supportingUnit,
                     currentBlocks: supportingUnitBlocks,
-                    movedHexes: supportMovedHexes,
+                    movedHexes: 0,
                     result: baseBonusDice
                 )
+
 
             }
 
             if !supportingUnit.hasSaber {
-                notes.append("Sabers count in this combined attack because the roll includes adjacent melee support.")
+                notes.append("Sabers do NOT count in this combined attack because the melee support unit does not have sabers.")
             }
+      
+                
 
         case .cavalry:
             baseBonusDice = meleeBaseDice(
@@ -787,20 +770,51 @@ struct NapoleonicsInfantryCombatEvaluator {
 
         case .artillery:
             baseBonusDice = 0
-            outcome = "Only infantry or cavalry can contribute melee dice to an artillery combined attack."
+            outcome = "Only Infantry or Cavalry can contribute melee dice to an artillery combined attack."
             notes.append("Supporting artillery does not add combined-attack melee dice.")
         }
+        
+        let spanishMovedModifier: Int
+        if (supportingUnitCountryID ?? supportingUnit.countryID) == "spain",
+           supportingUnit.unitClass == .infantry,
+           supportingUnitMovedIntoMelee,
+           !supportingUnitInSquare {
+            spanishMovedModifier = -1
+        } else {
+            spanishMovedModifier = 0
+        }
 
-        let terrainModifier = meleeTerrainModifier(
-            attacker: supportingUnit,
-            attackerTerrain: supportingTerrain,
-            defenderTerrain: defenderTerrain
-        )
-        let bonusDice = max(0, baseBonusDice + terrainModifier)
+        let attackerOutModifier = supportingTerrain.map {
+            outPenalty(for: supportingUnit.unitClass, terrain: $0)
+        } ?? 0
+
+        let defenderIntoModifier = defenderTerrain.map {
+            intoPenalty(for: supportingUnit.unitClass, terrain: $0)
+        } ?? 0
+
+        let terrainModifier = attackerOutModifier + defenderIntoModifier
+        let bonusDice = max(0, baseBonusDice + terrainModifier + spanishMovedModifier)
 
         let armName = supportingUnit.unitClass.rawValue.capitalized
-        let countryName = supportingUnit.countryID.capitalized
+        let countryName = (supportingUnitCountryID ?? supportingUnit.countryID).capitalized
         let dieWord = bonusDice == 1 ? "die" : "dice"
+
+        var supportBreakdown = "Supporting \(armName.lowercased()) base dice \(baseBonusDice)"
+
+        if attackerOutModifier != 0, let supportingTerrain {
+            supportBreakdown += "; attacking out of \(supportingTerrain.name) \(attackerOutModifier) dice"
+        }
+
+        if defenderIntoModifier != 0, let defenderTerrain {
+            supportBreakdown += "; attacking into \(defenderTerrain.name) \(defenderIntoModifier) dice"
+        }
+
+        if spanishMovedModifier != 0 {
+            supportBreakdown += "; Spanish moved into melee \(spanishMovedModifier) die"
+        }
+
+        supportBreakdown += "; net \(bonusDice) \(dieWord)"
+
 
         return CombinedArtilleryBonus(
             dice: bonusDice,
@@ -808,7 +822,7 @@ struct NapoleonicsInfantryCombatEvaluator {
             appliedRule: AppliedRule(
                 ruleID: "napoleonics.artillery.combinedAttack",
                 title: "Combined attack bonus",
-                outcome: "\(countryName) \(armName) support adds \(bonusDice) \(dieWord). \(outcome)"
+                outcome: "\(countryName) \(armName) support adds \(bonusDice) \(dieWord). \(supportBreakdown)"
             ),
             notes: notes
         )

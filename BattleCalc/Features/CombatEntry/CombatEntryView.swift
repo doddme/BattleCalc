@@ -234,6 +234,17 @@ struct CombatEntryView: View {
                 // The supporting unit must be an infantry or cavalry unit from
                 // the attacker's side. We do not ask separately whether it is
                 // infantry or cavalry — the chosen unit answers that naturally.
+                
+                // added so the country is chosen for the supporting unit.  we could have british artillery and spanish infantry
+                CombatDisclosureRow(
+                    label: "Supporting country",
+                    selection: vm.supportingCountry,
+                    options: supportingCountryOptions
+                ) {
+                    vm.supportingCountry = $0
+                }
+
+                
                 CombatDisclosureRow(
                     label: "Supporting unit",
                     selection: vm.supportingUnit,
@@ -422,12 +433,20 @@ struct CombatEntryView: View {
         }
     }
 
+    
+    // Supporting countries come from the non-French side of the battle.
+    // In Napoleonics the allies may mix support nations on the same side, so
+    // combined-attack support cannot be restricted to the artillery unit's own country.
+    private var supportingCountryOptions: [CombatPickItem] {
+        CombatEntryCatalog.countries().filter { $0.id != "france" }
+    }
+
     // Supporting units for a combined artillery attack come from the same side
     // as the artillery and are limited to infantry or cavalry. We intentionally
     // exclude artillery here because the evaluator treats only infantry/cavalry
-    // as valid melee support for this feature.
+    // as valid melee support for this feature.  Changed to supportingCountry instead of attacker country
     private var supportingUnitOptions: [CombatPickItem] {
-        guard let country = vm.attackerCountry else { return [] }
+        guard let country = vm.supportingCountry else { return [] }
         let infantry = CombatEntryCatalog.unitTypes(in: country.id, classID: "infantry")
         let cavalry = CombatEntryCatalog.unitTypes(in: country.id, classID: "cavalry")
         return infantry + cavalry

@@ -50,6 +50,7 @@ final class CombatEntryViewModel: ObservableObject {
             // off, clear all supporting-unit selections so stale hidden values
             // do not continue affecting the combat calculation.
             if !isCombinedAttack {
+                supportingCountry = nil
                 supportingUnit = nil
                 supportingUnitBlocks = nil
                 supportingUnitTerrain = nil
@@ -72,6 +73,13 @@ final class CombatEntryViewModel: ObservableObject {
     @Published var supportingUnitTerrain: CombatPickItem? { didSet { recompute() } }
     @Published var supportingUnitInSquare: Bool = false { didSet { recompute() } }
     @Published var supportingUnitMovedIntoMelee: Bool = false { didSet { recompute() } }
+    @Published var supportingCountry: CombatPickItem? {
+        didSet {
+            if supportingCountry?.id != oldValue?.id {
+                supportingCountryDidChange()
+            }
+        }
+    }
 
     
     // MARK: Output.
@@ -304,6 +312,14 @@ final class CombatEntryViewModel: ObservableObject {
         supportingUnitInSquare = false
         supportingUnitMovedIntoMelee = false
 
+        recompute()
+    }
+    private func supportingCountryDidChange() {
+        supportingUnit = nil
+        supportingUnitBlocks = nil
+        supportingUnitTerrain = nil
+        supportingUnitInSquare = false
+        supportingUnitMovedIntoMelee = false
         recompute()
     }
 
@@ -768,11 +784,14 @@ final class CombatEntryViewModel: ObservableObject {
             defenderBlocks: db,
             defenderTerrainID: dt.id,
             isCombinedAttack: isCombinedAttack,
+            supportingUnitCountryID: supportingCountry?.id,
             supportingUnitID: supportingUnit?.id,
             supportingUnitBlocks: supportingUnitBlocks,
             supportingUnitTerrainID: supportingUnitTerrain?.id,
             supportingUnitInSquare: supportingUnitInSquare,
+            supportingUnitMovedIntoMelee: supportingUnitMovedIntoMelee,
             attackDirection: .flat
+
         )
 
     }
