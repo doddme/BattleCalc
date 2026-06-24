@@ -78,6 +78,36 @@ struct CombatContext: Codable, Hashable {
     var defenderBlocks: Int
     var defenderTerrainID: String?
 
+    /////////////////////////////////////////
+    /// Combined attack support for Napoleonics artillery.
+    /// When true, the artillery attack may add melee dice from one supporting
+    /// adjacent ordered unit.
+    var isCombinedAttack: Bool = false
+
+    /// Optional supporting unit identity for a combined artillery attack.
+    var supportingUnitID: String? = nil
+
+    /// Current block count of the supporting unit, if one is selected.
+    var supportingUnitBlocks: Int? = nil
+    
+    /// Terrain occupied by the supporting unit during a combined artillery attack.
+    /// This matters because the supporting unit's melee dice may be modified by terrain.
+    var supportingUnitTerrainID: String? = nil
+
+    /// True when the supporting infantry unit is in square.
+    /// Ignored for cavalry and when there is no supporting unit.
+    var supportingUnitInSquare: Bool = false
+
+    /// True when the supporting unit moved into melee this turn.
+    /// This is tracked separately from the artillery attacker's movement because
+    /// some supporting-unit melee rules depend only on whether that support unit
+    /// moved into melee, not on how many hexes it moved.
+    var supportingUnitMovedIntoMelee: Bool = false
+
+
+    /////////////////////////////////////////////
+    
+    
     /// Leader support selected for each side in this combat.
     var attackerLeaderSupport: CombatLeaderSupport = .none
     var defenderLeaderSupport: CombatLeaderSupport = .none

@@ -626,19 +626,43 @@ struct NapoleonicsInfantryCombatEvaluator {
         }
 
         let isMelee = distance <= 1
-        let baseDice = slotDice
+        let artilleryBaseDice = slotDice
+        var baseDice = artilleryBaseDice
 
         let attackerTerrain = NapoleonicsTerrainLibrary.terrain(for: context.attackerTerrainID)
         let defenderTerrain = NapoleonicsTerrainLibrary.terrain(for: context.defenderTerrainID)
 
+        var notes: [String] = []
         var modifiers: [CombatModifier] = []
         var appliedRules: [AppliedRule] = [
             AppliedRule(
                 ruleID: isMelee ? "napoleonics.artillery.meleeBase" : "napoleonics.artillery.fireBase",
                 title: isMelee ? "Artillery melee base" : "Artillery fire base",
-                outcome: "At distance of \(distance) hex\(distance == 1 ? "" : "es") -> \(baseDice) dice"
+                outcome: "At distance of \(distance) hex\(distance == 1 ? "" : "es") -> \(artilleryBaseDice) dice"
             )
         ]
+
+        if context.isCombinedAttack,
+           let supportingUnitID = context.supportingUnitID,
+           let supportingUnit = NapoleonicsUnitLibrary.unit(for: supportingUnitID),
+           let supportingUnitBlocks = context.supportingUnitBlocks {
+
+            let combinedBonus = combinedArtilleryBonusDice(
+                supportingUnit: supportingUnit,
+                supportingUnitBlocks: supportingUnitBlocks,
+                supportingUnitTerrainID: context.supportingUnitTerrainID,
+                defenderTerrainID: context.defenderTerrainID,
+                supportingUnitInSquare: context.supportingUnitInSquare,
+                supportingUnitMovedIntoMelee: context.supportingUnitMovedIntoMelee
+            )
+
+
+
+            baseDice += combinedBonus.dice
+            appliedRules.append(combinedBonus.appliedRule)
+            notes.append(contentsOf: combinedBonus.notes)
+        }
+
 
         // Apply hill-to-hill (and any future special) resolution first, matching
         // the infantry path: melee hill-to-hill = no modifier, ranged
@@ -680,28 +704,117 @@ struct NapoleonicsInfantryCombatEvaluator {
                 outcome: "\(finalDice) dice"
             )
         )
-        ///// ignoreFlags
-        //let ignoreFlagsString = ignoreFlagMessage(for: defender)
-        //   if !ignoreFlagsString.isEmpty {
-        //        unitReminders.append(ignoreFlagsString)
-        //    }
-        ////
         return CombatResult(
             validation: CombatValidation(isAllowed: true, reasons: []),
             baseDice: baseDice,
             modifiers: modifiers,
             modifierTotal: modifierTotal,
             finalDice: finalDice,
-            notes: [
+            notes: notes + [
                 "Napoleonics artillery \(isMelee ? "melee" : "fire") evaluation.",
-                "artilleryBase:\(baseDice)@\(distance)"
+                "artilleryBase:\(artilleryBaseDice)@\(distance)"
             ],
+
             appliedRules: appliedRules
-            //,
-            /// For reminders like ignoreFlags
-            //unitReminders: unitReminders
+            )
+    }
+    
+    private struct CombinedArtilleryBonus {
+        let dice: Int
+        let sabersCount: Bool
+        let appliedRule: AppliedRule
+        let notes: [String]
+    }
+
+    private func combinedArtilleryBonusDice(
+        supportingUnit: UnitDefinition,
+        supportingUnitBlocks: Int,
+        supportingUnitTerrainID: String?,
+        defenderTerrainID: String?,
+        supportingUnitInSquare: Bool,
+        supportingUnitMovedIntoMelee: Bool
+    ) -> CombinedArtilleryBonus {
+
+        let supportingTerrain = NapoleonicsTerrainLibrary.terrain(for: supportingUnitTerrainID)
+        let defenderTerrain = NapoleonicsTerrainLibrary.terrain(for: defenderTerrainID)
+
+        let baseBonusDice: Int
+        let outcome: String
+        var notes: [String] = []
+
+        switch supportingUnit.unitClass {
+        case .infantry:
+            if supportingUnitInSquare {
+                baseBonusDice = 1
+                outcome = "Supporting infantry is in square, so it contributes 1 die in the combined attack."
+            } else {
+                // Supporting-unit movement is a simple yes/no state here.
+                // For support melee rules that care about "moved into melee",
+                // pass 1 when true and 0 when false so the existing melee helper
+                // can keep using its current movedHexes-based pattern.
+                let supportMovedHexes = supportingUnitMovedIntoMelee ? 1 : 0
+
+                baseBonusDice = meleeBaseDice(
+                    for: supportingUnit,
+                    currentBlocks: supportingUnitBlocks,
+                    movedHexes: supportMovedHexes
+                )
+                outcome = meleeBaseExplanation(
+                    for: supportingUnit,
+                    currentBlocks: supportingUnitBlocks,
+                    movedHexes: supportMovedHexes,
+                    result: baseBonusDice
+                )
+
+            }
+
+            if !supportingUnit.hasSaber {
+                notes.append("Sabers count in this combined attack because the roll includes adjacent melee support.")
+            }
+
+        case .cavalry:
+            baseBonusDice = meleeBaseDice(
+                for: supportingUnit,
+                currentBlocks: supportingUnitBlocks,
+                movedHexes: 0
+            )
+            outcome = meleeBaseExplanation(
+                for: supportingUnit,
+                currentBlocks: supportingUnitBlocks,
+                movedHexes: 0,
+                result: baseBonusDice
+            )
+
+        case .artillery:
+            baseBonusDice = 0
+            outcome = "Only infantry or cavalry can contribute melee dice to an artillery combined attack."
+            notes.append("Supporting artillery does not add combined-attack melee dice.")
+        }
+
+        let terrainModifier = meleeTerrainModifier(
+            attacker: supportingUnit,
+            attackerTerrain: supportingTerrain,
+            defenderTerrain: defenderTerrain
+        )
+        let bonusDice = max(0, baseBonusDice + terrainModifier)
+
+        let armName = supportingUnit.unitClass.rawValue.capitalized
+        let countryName = supportingUnit.countryID.capitalized
+        let dieWord = bonusDice == 1 ? "die" : "dice"
+
+        return CombinedArtilleryBonus(
+            dice: bonusDice,
+            sabersCount: true,
+            appliedRule: AppliedRule(
+                ruleID: "napoleonics.artillery.combinedAttack",
+                title: "Combined attack bonus",
+                outcome: "\(countryName) \(armName) support adds \(bonusDice) \(dieWord). \(outcome)"
+            ),
+            notes: notes
         )
     }
+
+    
 
     // MARK: - Artillery Helpers (Phase 2)
 
@@ -847,6 +960,23 @@ struct NapoleonicsInfantryCombatEvaluator {
         return nil
     }
 
+    private func meleeTerrainModifier(
+        attacker: UnitDefinition,
+        attackerTerrain: TerrainDefinition?,
+        defenderTerrain: TerrainDefinition?
+    ) -> Int {
+        if let attackerTerrain, let defenderTerrain,
+           attackerTerrain.id == "hill",
+           defenderTerrain.id == "hill" {
+            return 0
+        }
+
+        let out = attackerTerrain.map { outPenalty(for: attacker.unitClass, terrain: $0) } ?? 0
+        let into = defenderTerrain.map { intoPenalty(for: attacker.unitClass, terrain: $0) } ?? 0
+        return out + into
+    }
+
+    
     /// Resolve special-case ranged rules before applying standard terrain modifiers.
     /// Return nil when normal rules should be used.
     private func specialRangedResolution(

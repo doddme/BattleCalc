@@ -44,7 +44,36 @@ final class CombatEntryViewModel: ObservableObject {
     // targetDistance drives the engine's melee/ranged choice exactly as the
     // CSV sample loader does (distance 1 == melee). Default 1 = adjacent melee.
     @Published var targetDistance: Int = 1 { didSet { if targetDistance != oldValue { recompute() } } }
+    @Published var isCombinedAttack: Bool = false {
+        didSet {
+            // Combined attack is a rare optional branch. When the user turns it
+            // off, clear all supporting-unit selections so stale hidden values
+            // do not continue affecting the combat calculation.
+            if !isCombinedAttack {
+                supportingUnit = nil
+                supportingUnitBlocks = nil
+                supportingUnitTerrain = nil
+                supportingUnitInSquare = false
+                supportingUnitMovedIntoMelee = false
+            }
 
+            recompute()
+        }
+    }
+
+    @Published var supportingUnit: CombatPickItem? {
+        didSet {
+            if supportingUnit?.id != oldValue?.id {
+                supportingUnitDidChange()
+            }
+        }
+    }
+    @Published var supportingUnitBlocks: Int? { didSet { recompute() } }
+    @Published var supportingUnitTerrain: CombatPickItem? { didSet { recompute() } }
+    @Published var supportingUnitInSquare: Bool = false { didSet { recompute() } }
+    @Published var supportingUnitMovedIntoMelee: Bool = false { didSet { recompute() } }
+
+    
     // MARK: Output.
     @Published private(set) var result: CombatResult?
 
@@ -258,6 +287,24 @@ final class CombatEntryViewModel: ObservableObject {
         var range = 0
         for (i, slot) in band.enumerated() where slot != nil { range = i + 1 }
         return range
+    }
+    private func supportingUnitDidChange() {
+        if let unit = supportingUnit {
+            // Default the support unit's blocks immediately when the user picks it,
+            // matching the attacker/defender unit flow. This prevents the combined
+            // attack context from carrying nil blocks even though the UI can show
+            // a fallback display value.
+            supportingUnitBlocks = CombatEntryCatalog.maxBlocks(forUnit: unit.id)
+        } else {
+            supportingUnitBlocks = nil
+        }
+
+        // Square and moved-into-melee are support-unit-specific questions, so
+        // reset them when the selected supporting unit changes.
+        supportingUnitInSquare = false
+        supportingUnitMovedIntoMelee = false
+
+        recompute()
     }
 
     // MARK: - Collapsed-summary detail lines.
@@ -720,8 +767,14 @@ final class CombatEntryViewModel: ObservableObject {
             defenderUnitID: du.id,
             defenderBlocks: db,
             defenderTerrainID: dt.id,
+            isCombinedAttack: isCombinedAttack,
+            supportingUnitID: supportingUnit?.id,
+            supportingUnitBlocks: supportingUnitBlocks,
+            supportingUnitTerrainID: supportingUnitTerrain?.id,
+            supportingUnitInSquare: supportingUnitInSquare,
             attackDirection: .flat
         )
+
     }
 
     /// Ordered, human-readable trace for the most recent battle (the engine's

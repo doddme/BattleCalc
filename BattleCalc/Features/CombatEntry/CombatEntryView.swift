@@ -43,11 +43,16 @@ struct CombatEntryView: View {
                 // it no longer "sometimes appears, sometimes not".
                 if vm.attackerTerrain != nil { distanceBanner }
                 if vm.attackerTerrain != nil { defenderSection }
-                // PLAYTEST: distance now lives inline in the attacker flow
-                // (`targetDistanceRow`), so the standalone extras section is not
-                // shown. To revert to the old "Battle details" placement, restore
-                // `if vm.defenderTerrain != nil { extrasSection }` here and remove
-                // the `targetDistanceRow` call in `attackerSection`.
+
+                // Rare Napoleonics artillery branch:
+                // only show the combined-attack questions after both main sides
+                // are complete, and only when the attacking unit is artillery.
+                // This keeps the common artillery flow fast and hides the extra
+                // support-unit questions unless they are actually relevant.
+                if vm.attackerComplete && vm.defenderComplete && vm.attackerUnitClass == .artillery {
+                    combinedAttackSection
+                }
+
                 if vm.result != nil { resultSection }
                 // Melee-only follow-up: after an allowed melee result, ask if the
                 // defender retreated and (if not) offer a battle-back.
@@ -62,8 +67,8 @@ struct CombatEntryView: View {
                             Button("Change Game") { showChangeGameConfirmation = true }
                         }
                         #if DEBUG
-                        Button("Napoleonics Data") { showNapoleonicsDataDebug = true }
-                        Button("Ancients Data") { showAncientsDataDebug = true }
+                        Button("Show Napoleonics Load Data") { showNapoleonicsDataDebug = true }
+                        Button("Show Ancients Load Data") { showAncientsDataDebug = true }
                         Button("Debug") { showDebug = true }
                         #endif
                     } label: {
@@ -216,6 +221,72 @@ struct CombatEntryView: View {
         }
     }
 
+    // MARK: - Combined attack (Napoleonics artillery only)
+    @ViewBuilder private var combinedAttackSection: some View {
+        Section("Combined Attack") {
+            // Combined attacks are rare, so the UI starts with one high-level
+            // yes/no question. Only if the user says yes do we ask for the
+            // supporting-unit details needed by the evaluator.
+            Toggle("Is this a Combined Attack with another ordered unit?",
+                   isOn: $vm.isCombinedAttack)
+
+            if vm.isCombinedAttack {
+                // The supporting unit must be an infantry or cavalry unit from
+                // the attacker's side. We do not ask separately whether it is
+                // infantry or cavalry — the chosen unit answers that naturally.
+                CombatDisclosureRow(
+                    label: "Supporting unit",
+                    selection: vm.supportingUnit,
+                    options: supportingUnitOptions
+                ) {
+                    vm.supportingUnit = $0
+                }
+
+                if vm.supportingUnit != nil {
+                    // The evaluator needs the support unit's current blocks
+                    // because its melee contribution depends on block count.
+                    CombatBlocksRow(
+                        label: "Supporting unit blocks",
+                        value: vm.supportingUnitBlocks ?? supportingUnitMaxBlocks,
+                        maxBlocks: supportingUnitMaxBlocks
+                    ) {
+                        vm.supportingUnitBlocks = $0
+                    }
+                }
+
+                if vm.supportingUnit != nil {
+                    // The support unit's terrain matters because its melee dice
+                    // contribution is still affected by terrain modifiers.
+                    CombatDisclosureRow(
+                        label: "Supporting terrain",
+                        selection: vm.supportingUnitTerrain,
+                        options: vm.terrainOptions
+                    ) {
+                        vm.supportingUnitTerrain = $0
+                    }
+                }
+                
+                if showsSupportingUnitMovedIntoMeleeToggle {
+                                    // Spanish infantry melee support may lose 1 die if it moved
+                                    // into melee this turn, so we ask only a simple yes/no here.
+                                    // We do not ask how many hexes it moved because that does not
+                                    // affect this support calculation.
+                                    Toggle("Supporting Spanish infantry moved into melee this turn",
+                                           isOn: $vm.supportingUnitMovedIntoMelee)
+                                }
+
+                if supportingUnitClass == .infantry {
+                    // Infantry support needs one extra state: whether it is in
+                    // square. Per current Napoleonics combined-attack handling,
+                    // infantry in square contributes 1 die before terrain effects.
+                    Toggle("Supporting infantry is in square",
+                           isOn: $vm.supportingUnitInSquare)
+                }
+            }
+        }
+    }
+
+    
     // MARK: - Extras (battle-wide; compact summary by default)
     @ViewBuilder private var extrasSection: some View {
         Section("Battle details") {
@@ -327,7 +398,7 @@ struct CombatEntryView: View {
                     LabeledContent("Defender blocks remaining",
                                    value: "\(vm.defenderRemainingBlocks ?? upper) / \(upper)")
                 }
-                Text("Important: Update the defender's block strength, then battle back. If the defender is eliminated, it cannot battle back.")
+                Text("Important: Update the (original) defender's block strength, then battle back. If the defender is eliminated, it cannot battle back.")
                     .font(.caption).foregroundStyle(.secondary)
 
                 Button("Battle Back") { vm.performBattleBack() }
@@ -351,6 +422,42 @@ struct CombatEntryView: View {
         }
     }
 
+    // Supporting units for a combined artillery attack come from the same side
+    // as the artillery and are limited to infantry or cavalry. We intentionally
+    // exclude artillery here because the evaluator treats only infantry/cavalry
+    // as valid melee support for this feature.
+    private var supportingUnitOptions: [CombatPickItem] {
+        guard let country = vm.attackerCountry else { return [] }
+        let infantry = CombatEntryCatalog.unitTypes(in: country.id, classID: "infantry")
+        let cavalry = CombatEntryCatalog.unitTypes(in: country.id, classID: "cavalry")
+        return infantry + cavalry
+    }
+
+    // Used only to decide whether the extra "in square" question should appear.
+    // If the chosen support unit is infantry, we ask it; cavalry does not need it.
+    private var supportingUnitClass: UnitClass? {
+        guard let unitID = vm.supportingUnit?.id else { return nil }
+        return NapoleonicsUnitLibrary.unit(for: unitID)?.unitClass
+    }
+    
+    // Only Spanish infantry currently needs the extra yes/no movement question
+    // in the combined-attack support flow. We keep this narrow on purpose so
+    // rare combined attacks do not ask extra questions unless the answer can
+    // actually change the dice.
+    private var showsSupportingUnitMovedIntoMeleeToggle: Bool {
+        guard let unitID = vm.supportingUnit?.id,
+        let unit = NapoleonicsUnitLibrary.unit(for: unitID) else { return false }
+        
+        return unit.countryID == "spain" && unit.unitClass == .infantry
+        }
+
+    // The support-unit blocks stepper uses the selected unit's own max blocks,
+    // just like the main attacker/defender block steppers do elsewhere.
+    private var supportingUnitMaxBlocks: Int {
+        vm.supportingUnit.map { CombatEntryCatalog.maxBlocks(forUnit: $0.id) } ?? 8
+    }
+
+    
     // MARK: - DEBUG bar (compile-time gated)
     @ViewBuilder private var debugBar: some View {
         #if DEBUG
@@ -498,6 +605,9 @@ struct CombatPickRowContent: View {
         }
     }
 }
+
+
+
 
 /// Collapsed summary for a whole side. Stands in for Country + Unit class +
 /// Unit type + Blocks + (Moved) + Terrain once the side is complete: the unit
