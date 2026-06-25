@@ -24,6 +24,8 @@ struct CombatEntryView: View {
     // to re-expand Country / Unit class / Unit type for editing.
     @State private var editingAttacker = false
     @State private var editingDefender = false
+    @State private var editingSupportingUnit = false
+
     // Battle-wide extras (range/mode) collapse into a compact summary too.
     @State private var editingExtras = false
     @State private var showChangeGameConfirmation = false
@@ -231,69 +233,122 @@ struct CombatEntryView: View {
                    isOn: $vm.isCombinedAttack)
 
             if vm.isCombinedAttack {
-                // The supporting unit must be an infantry or cavalry unit from
-                // the attacker's side. We do not ask separately whether it is
-                // infantry or cavalry — the chosen unit answers that naturally.
-                
-                // added so the country is chosen for the supporting unit.  we could have british artillery and spanish infantry
-                CombatDisclosureRow(
-                    label: "Supporting country",
-                    selection: vm.supportingCountry,
-                    options: supportingCountryOptions
-                ) {
-                    vm.supportingCountry = $0
-                }
-
-                
-                CombatDisclosureRow(
-                    label: "Supporting unit",
-                    selection: vm.supportingUnit,
-                    options: supportingUnitOptions
-                ) {
-                    vm.supportingUnit = $0
-                }
-
-                if vm.supportingUnit != nil {
-                    // The evaluator needs the support unit's current blocks
-                    // because its melee contribution depends on block count.
-                    CombatBlocksRow(
-                        label: "Supporting unit blocks",
-                        value: vm.supportingUnitBlocks ?? supportingUnitMaxBlocks,
-                        maxBlocks: supportingUnitMaxBlocks
+                // Match the attacker/defender progressive-disclosure pattern:
+                // once the support unit has the required fields, collapse it to
+                // one compact colored summary row so the result section stays
+                // higher on screen and the user scrolls less.
+                //
+                // Tapping the summary re-expands the support rows for editing,
+                // but does not clear the chosen values.
+                if let unit = vm.supportingUnit,
+                   vm.supportingUnitComplete,
+                   !editingSupportingUnit {
+                    SideSummaryRow(
+                        unit: unit,
+                        countryID: vm.supportingCountry?.id,
+                        detail: vm.supportingUnitSummaryDetail
                     ) {
-                        vm.supportingUnitBlocks = $0
+                        editingSupportingUnit = true
                     }
-                }
+                } else {
+                    // The supporting unit must be an infantry or cavalry unit from
+                    // the attacker's side. We do not ask separately whether it is
+                    // infantry or cavalry — the chosen unit answers that naturally.
+                    //
+                    // This whole branch is the expanded editor for the support unit.
+                    // Once complete, the "Done" button below collapses it back to
+                    // the compact summary row above.
+                    
+                    // added so the country is chosen for the supporting unit.
+                    // we could have british artillery and spanish infantry
+                    //
+                    // France is the special case: France has no allied support-country
+                    // choice here, so when France is the attacker the support country
+                    // is auto-set in the view model and this picker is hidden.
+                    if !vm.isFranceAttacker {  // Excluding France because it has no allies and it's always france
+                        CombatDisclosureRow(
+                            label: "Supporting country",
+                            selection: vm.supportingCountry,
+                            options: supportingCountryOptions
+                        ) {
+                            vm.supportingCountry = $0
+                        }
+                    } else if let country = vm.supportingCountry {
+                        // Show the locked France value while expanded so the user
+                        // can still see which country is being used for support.
+                        LabeledContent("Supporting country", value: country.title)
+                    }
 
-                if vm.supportingUnit != nil {
-                    // The support unit's terrain matters because its melee dice
-                    // contribution is still affected by terrain modifiers.
                     CombatDisclosureRow(
-                        label: "Supporting terrain",
-                        selection: vm.supportingUnitTerrain,
-                        options: vm.terrainOptions
+                        label: "Supporting unit",
+                        selection: vm.supportingUnit,
+                        options: supportingUnitOptions
                     ) {
-                        vm.supportingUnitTerrain = $0
+                        vm.supportingUnit = $0
                     }
-                }
-                
-                if showsSupportingUnitMovedIntoMeleeToggle {
-                                    // Spanish infantry melee support may lose 1 die if it moved
-                                    // into melee this turn, so we ask only a simple yes/no here.
-                                    // We do not ask how many hexes it moved because that does not
-                                    // affect this support calculation.
-                                    Toggle("Supporting Spanish infantry moved into melee this turn",
-                                           isOn: $vm.supportingUnitMovedIntoMelee)
-                                }
 
-                if supportingUnitClass == .infantry {
-                    // Infantry support needs one extra state: whether it is in
-                    // square. Per current Napoleonics combined-attack handling,
-                    // infantry in square contributes 1 die before terrain effects.
-                    Toggle("Supporting infantry is in square",
-                           isOn: $vm.supportingUnitInSquare)
+                    if vm.supportingUnit != nil {
+                        // The evaluator needs the support unit's current blocks
+                        // because its melee contribution depends on block count.
+                        CombatBlocksRow(
+                            label: "Supporting unit blocks",
+                            value: vm.supportingUnitBlocks ?? supportingUnitMaxBlocks,
+                            maxBlocks: supportingUnitMaxBlocks
+                        ) {
+                            vm.supportingUnitBlocks = $0
+                        }
+                    }
+
+                    if vm.supportingUnit != nil {
+                        // The support unit's terrain matters because its melee dice
+                        // contribution is still affected by terrain modifiers.
+                        //
+                        // Selecting terrain is the last always-needed field for the
+                        // current support-unit flow, so after this point the support
+                        // side is considered complete and may be collapsed.
+                        CombatDisclosureRow(
+                            label: "Supporting terrain",
+                            selection: vm.supportingUnitTerrain,
+                            options: vm.terrainOptions
+                        ) {
+                            vm.supportingUnitTerrain = $0
+                        }
+                    }
+                    
+                    if showsSupportingUnitMovedIntoMeleeToggle {
+                        // Spanish infantry melee support may lose 1 die if it moved
+                        // into melee this turn, so we ask only a simple yes/no here.
+                        // We do not ask how many hexes it moved because that does not
+                        // affect this support calculation.
+                        //
+                        // This answer is preserved when collapsing/re-expanding so
+                        // the user can review or edit it without re-entering the row.
+                        Toggle("Supporting Spanish infantry moved into melee this turn",
+                               isOn: $vm.supportingUnitMovedIntoMelee)
+                    }
+
+                    if supportingUnitClass == .infantry {
+                        // Infantry support needs one extra state: whether it is in
+                        // square. Per current Napoleonics combined-attack handling,
+                        // infantry in square contributes 1 die before terrain effects.
+                        //
+                        // This also becomes part of the collapsed summary detail so
+                        // the support unit's special status is still visible at a glance.
+                        Toggle("Supporting infantry is in square",
+                               isOn: $vm.supportingUnitInSquare)
+                    }
+
+                    if vm.supportingUnitComplete {
+                        // Mirrors the attacker/defender flow: once the support side
+                        // is complete, let the user collapse it intentionally to keep
+                        // the result dice count visible with minimal scrolling.
+                        Button("Done") {
+                            editingSupportingUnit = false
+                        }
+                    }
                 }
             }
+
         }
     }
 

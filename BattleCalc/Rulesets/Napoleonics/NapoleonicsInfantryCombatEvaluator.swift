@@ -822,7 +822,13 @@ struct NapoleonicsInfantryCombatEvaluator {
             appliedRule: AppliedRule(
                 ruleID: "napoleonics.artillery.combinedAttack",
                 title: "Combined attack bonus",
-                outcome: "\(countryName) \(armName) support adds \(bonusDice) \(dieWord). \(supportBreakdown)"
+                // Fold the already-computed support-unit outcome into the final
+                // player-facing rule text instead of dropping it here. This keeps
+                // the concise "adds X dice" summary, but also preserves the more
+                // specific explanation of *why* that support unit contributed the
+                // base dice it did (square, base melee dice, unsupported artillery, etc.).
+                outcome: "\(countryName) \(armName) support adds \(bonusDice) \(dieWord). \(outcome) \(supportBreakdown)"
+
             ),
             notes: notes
         )

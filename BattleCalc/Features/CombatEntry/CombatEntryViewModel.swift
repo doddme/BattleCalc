@@ -56,11 +56,14 @@ final class CombatEntryViewModel: ObservableObject {
                 supportingUnitTerrain = nil
                 supportingUnitInSquare = false
                 supportingUnitMovedIntoMelee = false
+            } else {
+                syncSupportingCountryForCombinedAttack()
             }
 
             recompute()
         }
     }
+
 
     @Published var supportingUnit: CombatPickItem? {
         didSet {
@@ -97,16 +100,34 @@ final class CombatEntryViewModel: ObservableObject {
 
     // MARK: - Battle-back gating + actions.
 
-    /// The primary attack resolved as a melee (distance 1) and was allowed.
-    /// Battle-back is a melee-only follow-up, so the controls only appear when
-    /// the original result is an allowed melee.
-    var isPrimaryMelee: Bool {
-        targetDistance == 1 && (result?.validation.isAllowed ?? false)
+    /// Normal battle-back is offered after an allowed melee primary attack.
+    /// Combined-artillery is a special case: the initial artillery attack may be
+    /// ranged, but if it was a combined attack the defender may still battle back
+    /// in melee against the supporting unit.
+    private var isAllowedPrimaryResult: Bool {
+        result?.validation.isAllowed ?? false
     }
 
-    /// Show the "Did the defender Retreat?" controls only after a valid melee
-    /// primary result exists.
-    var showsBattleBackControls: Bool { isPrimaryMelee }
+    private var isCombinedArtilleryBattleBackCase: Bool {
+        isCombinedAttack
+            && attackerUnitClass == .artillery
+            && supportingUnit != nil
+            && supportingUnitTerrain != nil
+            && isAllowedPrimaryResult
+    }
+
+    var isPrimaryMelee: Bool {
+        targetDistance == 1 && isAllowedPrimaryResult
+    }
+
+    /// Show the "Did the defender Retreat?" controls after either:
+    /// - a normal allowed melee result, or
+    /// - an allowed combined-artillery result that can lead to melee battle-back
+    ///   against the supporting unit.
+    var showsBattleBackControls: Bool {
+        isPrimaryMelee || isCombinedArtilleryBattleBackCase
+    }
+
 
     /// The defender's remaining-blocks bound. The stepper runs 1...original
     /// defender blocks. We do not allow 0 here: an eliminated unit cannot battle
@@ -118,10 +139,11 @@ final class CombatEntryViewModel: ObservableObject {
     /// Battle Back is offerable only when the defender did NOT retreat and has
     /// at least one block remaining.
     var canBattleBack: Bool {
-        isPrimaryMelee
+        showsBattleBackControls
             && defenderRetreated == false
             && (defenderRemainingBlocks ?? 0) >= 1
     }
+
 
     /// Public setter for the retreat answer (the stored property is private(set)
     /// so the cascade reset stays internal). Setting it triggers the didSet.
@@ -163,33 +185,90 @@ final class CombatEntryViewModel: ObservableObject {
 
     /// Reversed context for the battle-back. Mirrors `buildContext()` but swaps
     /// the two sides, forces melee/distance 1/stationary, and uses the adjusted
-    /// remaining defender blocks as the (new) attacker's block count. Returns nil
-    /// if any field is still missing.
+    /// remaining defender blocks as the (new) attacker's block count.
+    ///
+    /// Normal melee battle-back:
+    /// - New attacker = original defender
+    /// - New defender = original attacker
+    ///
+    /// Combined-artillery battle-back:
+    /// - New attacker = original defender
+    /// - New defender = original supporting non-artillery unit only
+    ///
+    /// This preserves the normal retreat / remaining-blocks flow, but targets the
+    /// support unit instead of the artillery piece when the original attack was a
+    /// combined artillery attack.
     func buildBattleBackContext() -> CombatContext? {
         guard
-            let ac = attackerCountry, let au = attackerUnit,
-            let ab = attackerBlocks, let at = attackerTerrain,
-            let dc = defenderCountry, let du = defenderUnit,
+            let dc = defenderCountry,
+            let du = defenderUnit,
             let dt = defenderTerrain,
             let remaining = defenderRemainingBlocks
         else { return nil }
 
-        // New attacker = original defender; new defender = original attacker.
+        let battleBackDefenderCountry: CombatPickItem
+        let battleBackDefenderUnit: CombatPickItem
+        let battleBackDefenderBlocks: Int
+        let battleBackDefenderTerrain: CombatPickItem
+
+        if isCombinedAttack {
+            guard
+                let sc = supportingCountry,
+                let su = supportingUnit,
+                let sb = supportingUnitBlocks,
+                let st = supportingUnitTerrain
+            else { return nil }
+
+            battleBackDefenderCountry = sc
+            battleBackDefenderUnit = su
+            battleBackDefenderBlocks = sb
+            battleBackDefenderTerrain = st
+        } else {
+            guard
+                let ac = attackerCountry,
+                let au = attackerUnit,
+                let ab = attackerBlocks,
+                let at = attackerTerrain
+            else { return nil }
+
+            battleBackDefenderCountry = ac
+            battleBackDefenderUnit = au
+            battleBackDefenderBlocks = ab
+            battleBackDefenderTerrain = at
+        }
+
         return CombatContext(
             combatMode: .melee,
             movedHexes: 0,
             targetDistance: 1,
+
+            // New attacker = original defender, with post-combat remaining blocks.
             attackerCountryID: dc.id,
             attackerUnitID: du.id,
             attackerBlocks: remaining,
             attackerTerrainID: dt.id,
-            defenderCountryID: ac.id,
-            defenderUnitID: au.id,
-            defenderBlocks: ab,
-            defenderTerrainID: at.id,
-            attackDirection: .flat
+
+            // New defender = original attacker in normal battle-back, or the
+            // supporting unit only for combined-artillery battle-back.
+            defenderCountryID: battleBackDefenderCountry.id,
+            defenderUnitID: battleBackDefenderUnit.id,
+            defenderBlocks: battleBackDefenderBlocks,
+            defenderTerrainID: battleBackDefenderTerrain.id,
+
+            // Battle-back itself is a plain melee from the defender's hex. Do not
+            // carry combined-artillery support state into the reversed attack.
+            isCombinedAttack: false,
+            supportingUnitCountryID: nil,
+            supportingUnitID: nil,
+            supportingUnitBlocks: nil,
+            supportingUnitTerrainID: nil,
+            supportingUnitInSquare: false,
+            supportingUnitMovedIntoMelee: false,
+            attackDirection: .flat,
+            isBattleBack: true
         )
     }
+
 
     // MARK: - Option providers (each section reads these).
     var countryOptions: [CombatPickItem] { CombatEntryCatalog.countries() }
@@ -225,6 +304,22 @@ final class CombatEntryViewModel: ObservableObject {
         CombatEntryCatalog.countries().first { $0.id == Self.franceID }
     }
 
+    /// Combined attack support-country rule:
+    /// - France attacker => support country is forced to France.
+    /// - Non-France attacker => user must pick a non-France support country.
+    private func syncSupportingCountryForCombinedAttack() {
+        guard isCombinedAttack else { return }
+
+        if isFranceAttacker {
+            if supportingCountry?.id != Self.franceID {
+                supportingCountry = franceCountryItem
+            }
+        } else if supportingCountry?.id == Self.franceID {
+            supportingCountry = nil
+        }
+    }
+
+    
     var defenderClassOptions: [CombatPickItem] { defenderCountry.map { CombatEntryCatalog.classes(in: $0.id) } ?? [] }
     var defenderUnitOptions: [CombatPickItem] {
         guard let c = defenderCountry, let k = defenderClass else { return [] }
@@ -355,9 +450,55 @@ final class CombatEntryViewModel: ObservableObject {
         return parts.joined(separator: " • ")
     }
 
+    /// Supporting-unit chips: blocks • terrain • moved-into-melee • square.
+    ///
+    /// This mirrors the attacker/defender collapsed-summary pattern so the
+    /// combined-attack branch can shrink back down after entry. Keep this
+    /// concise: the goal is to remind the user what they picked without pushing
+    /// the result section farther down the screen.
+    var supportingUnitSummaryDetail: String {
+        var parts: [String] = []
+
+        if let b = Self.blocksChip(supportingUnitBlocks) { parts.append(b) }
+        if let t = supportingUnitTerrain { parts.append(t.title) }
+
+        // Keep the support-summary logic self-contained in the view model.
+        // These facts already exist in the view layer too, but helpers defined
+        // in CombatEntryView are not visible here, so we derive them again from
+        // the chosen support unit ID.
+        let supportUnit = supportingUnit.flatMap { NapoleonicsUnitLibrary.unit(for: $0.id) }
+        let supportUnitClass = supportUnit?.unitClass
+        let showsMovedIntoMeleeChip = supportUnit?.countryID == "spain"
+            && supportUnitClass == .infantry
+
+        // Spanish infantry melee support can lose a die if it moved into melee.
+        // Only show this chip when that question is relevant for the chosen unit.
+        if showsMovedIntoMeleeChip {
+            parts.append(supportingUnitMovedIntoMelee ? "Moved into melee" : "Did not move into melee")
+        }
+
+        // Square only matters for infantry support. Keep the chip short and only
+        // show it when true; omitting it reads more cleanly than "Not in square."
+        if supportUnitClass == .infantry, supportingUnitInSquare {
+            parts.append("In square")
+        }
+
+        return parts.joined(separator: " • ")
+    }
+
+
+    
     /// True once a side has all of its fields, so it can collapse to a summary.
     var attackerComplete: Bool { attackerTerrain != nil }
     var defenderComplete: Bool { defenderTerrain != nil }
+    /// True once the support side has the fields needed for the current compact
+    /// summary / collapse behavior. For now we mirror the existing flow and
+    /// require a chosen support unit plus terrain.
+    ///
+    /// We can tighten this later if we decide infantry square or Spanish
+    /// moved-into-melee must be answered before collapse, but this is the
+    /// smallest working change and matches the current UI flow best.
+    var supportingUnitComplete: Bool { supportingUnit != nil && supportingUnitTerrain != nil }
 
     /// Battle-wide extras summary (range + resolved mode). Not country-specific,
     /// so it collapses into its own compact row rather than a side box.
@@ -472,7 +613,9 @@ final class CombatEntryViewModel: ObservableObject {
             // Attacker cleared entirely: drop the defender too.
             clearDefenderCountry()
         }
+        syncSupportingCountryForCombinedAttack()
         recompute()
+
     }
 
     /// Resets the defender country to satisfy the France rule from scratch:
