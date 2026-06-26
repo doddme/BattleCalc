@@ -101,9 +101,9 @@ final class AncientsCombatEntryViewModel: ObservableObject {
         }
 
         if canMakeBonusCloseCombatAfterMomentumAdvance(unit) {
-            parts.append("**This attacker may choose a bonus Close Combat after making the Momentum Advance (Take Ground).**")
+            parts.append("**This attacker MAY choose a BONUS CLOSE COMBAT after making the Momentum Advance (Take Ground).**")
         } else {
-            parts.append("This attacker does not currently qualify for a bonus Close Combat after Momentum Advance.")
+            parts.append("This attacker can NOT Bonus Close Combat after Momentum Advance.")
         }
 
         return parts.joined(separator: " ")

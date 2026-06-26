@@ -18,10 +18,9 @@ struct AncientsCombatEntryView: View {
 
     @StateObject private var vm = AncientsCombatEntryViewModel()
     @State private var editingAttacker = true
-    @State private var editingAttackDetails = true
     @State private var editingDefender = true
     @State private var showChangeGameConfirmation = false
-    #if DEBUG
+   #if DEBUG
     @State private var showNapoleonicsDataDebug = false
     @State private var showAncientsDataDebug = false
     #endif
@@ -32,11 +31,10 @@ struct AncientsCombatEntryView: View {
                 draftNotice
                 attackerSection
                 if vm.attackerComplete && !editingAttacker {
-                    attackDetailsSection
-                }
-                if vm.attackDetailsComplete && !editingAttacker && !editingAttackDetails {
+                    distanceBanner
                     defenderSection
                 }
+
                 if let result = vm.result, vm.defenderComplete, !editingDefender {
                     resultSection(result, title: "Result")
                 }
@@ -87,13 +85,33 @@ struct AncientsCombatEntryView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
+    private var distanceBanner: some View {
+        Section {
+            Button {
+                editingAttacker = true
+                editingDefender = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: vm.isMelee ? "shield.lefthalf.filled" : "scope")
+                        .foregroundStyle(.tint)
+                    Text(vm.distanceHeadline)
+                        .font(.headline)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
 
     private var attackerSection: some View {
         Section("Attacker") {
             if let unit = vm.attackerUnit, vm.attackerComplete, !editingAttacker {
                 SideSummaryRow(unit: unit, countryID: nil, detail: vm.attackerSummaryDetail) {
                     editingAttacker = true
-                    editingAttackDetails = true
                     editingDefender = true
                 }
             } else {
@@ -107,46 +125,41 @@ struct AncientsCombatEntryView: View {
                     AncientsLeaderSupportRow(label: "Leader support", support: vm.attackerLeaderSupport) { vm.attackerLeaderSupport = $0 }
                 }
                 if vm.attackerMovedHexes != nil {
+                    Stepper(value: $vm.targetDistance, in: 1...6) {
+                        LabeledContent(
+                            "Distance to target",
+                            value: "\(vm.targetDistance) hex\(vm.targetDistance == 1 ? "" : "es")"
+                        )
+                    }
+
+                    HStack(spacing: 8) {
+                        Image(systemName: vm.isMelee ? "shield.lefthalf.filled" : "scope")
+                            .foregroundStyle(.tint)
+                        Text(vm.distanceHeadline)
+                            .font(.headline)
+                    }
+
+                    Text("Range 1 is Close Combat. Range 2 or more is ranged combat if the unit can fire that far.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
                     CombatDisclosureRow(label: "Terrain (occupies)", selection: vm.attackerTerrain, options: vm.terrainOptions) {
                         vm.attackerTerrain = $0
-                        editingAttacker = false
                     }
+
+                    if vm.attackerComplete {
+                        Button("Done") {
+                            editingAttacker = false
+                        }
+                    }
+
                 }
+
             }
         }
     }
 
-    private var attackDetailsSection: some View {
-        Section("Attack") {
-            if !editingAttackDetails {
-                Button { editingAttackDetails = true } label: {
-                    HStack {
-                        Text("Range").foregroundStyle(.secondary)
-                        Spacer()
-                        Text(vm.attackSummaryDetail)
-                        Image(systemName: "chevron.down").font(.caption).foregroundStyle(.tertiary)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            } else {
-                Stepper(value: $vm.targetDistance, in: 1...6) {
-                    LabeledContent("Distance to target", value: "\(vm.targetDistance) hex\(vm.targetDistance == 1 ? "" : "es")")
-                }
-                HStack(spacing: 8) {
-                    Image(systemName: vm.isMelee ? "shield.lefthalf.filled" : "scope")
-                        .foregroundStyle(.tint)
-                    Text(vm.distanceHeadline)
-                        .font(.headline)
-                }
-                Text("Range 1 is Close Combat. Range 2 or more is ranged combat if the unit can fire that far.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button("Done") { editingAttackDetails = false }
-            }
-        }
-    }
-
+ 
     private var defenderSection: some View {
         Section("Defender") {
             if let unit = vm.defenderUnit, vm.defenderComplete, !editingDefender {
@@ -169,8 +182,14 @@ struct AncientsCombatEntryView: View {
                     }
                     CombatDisclosureRow(label: "Terrain (occupies)", selection: vm.defenderTerrain, options: vm.terrainOptions) {
                         vm.defenderTerrain = $0
-                        editingDefender = false
                     }
+
+                    if vm.defenderComplete {
+                        Button("Done") {
+                            editingDefender = false
+                        }
+                    }
+
                 }
             }
         }
@@ -178,7 +197,7 @@ struct AncientsCombatEntryView: View {
 
     private var battleBackSection: some View {
         Section("After Close Combat") {
-            Text("Battle Back happens only if the defender survived and did not retreat out of its hex. If the defender was eliminated or forced to retreat, check Momentum Advance instead.")
+            Text("Battle Back happens only if the defender survived and did not retreat out of its hex. If the defender was eliminated or forced to retreat, check MOMENTUM ADVANCE (take ground) instead.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -186,11 +205,24 @@ struct AncientsCombatEntryView: View {
             HStack {
                 Text("Was defender eliminated or forced to retreat?")
                 Spacer()
-                Button("No") { vm.setDefenderStayedInHex(true) }
-                    .buttonStyle(.bordered)
-                Button("Yes") { vm.setDefenderStayedInHex(false) }
-                    .buttonStyle(.borderedProminent)
+
+                if vm.defenderStayedInHex == true {
+                    Button("No") { vm.setDefenderStayedInHex(true) }
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    Button("No") { vm.setDefenderStayedInHex(true) }
+                        .buttonStyle(.bordered)
+                }
+
+                if vm.defenderStayedInHex == false {
+                    Button("Yes") { vm.setDefenderStayedInHex(false) }
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    Button("Yes") { vm.setDefenderStayedInHex(false) }
+                        .buttonStyle(.bordered)
+                }
             }
+
 
             if vm.defenderStayedInHex == true {
                 Text("Defender remained in their hex, so it may Battle Back.")
@@ -222,7 +254,6 @@ struct AncientsCombatEntryView: View {
     private func resetScreen() {
         vm.reset()
         editingAttacker = true
-        editingAttackDetails = true
         editingDefender = true
     }
 }
