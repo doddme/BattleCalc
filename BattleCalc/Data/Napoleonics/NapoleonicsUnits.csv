@@ -38,20 +38,20 @@ austrian-militia,austria,Austrian Militia,infantry,4,1,1,2,currentBlocks,halfCur
 french-foot-artillery,france,French Foot Artillery,artillery,3,1,0,5,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|3|2|1|1,3|2|1|1,,,0
 french-horse-artillery,france,French Horse Artillery,artillery,3,2,1,4,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,3|2|1,2|1|1,3|2|1,,0
 french-guard-foot-artillery,france,French Guard Foot Artillery,artillery,3,1,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,5|3|2|1|1,4|2|1|1,,,2
-french-guard-horse-artillery,france,French Guard Horse Artillery,artillery,3,2,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|2|1|1,4|2|1,3|1|1,,2
+french-guard-horse-artillery,france,French Guard Horse Artillery,artillery,3,2,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|2|1|1,3|1|1,4|2|1,,2
 british-foot-artillery,britain,British Foot Artillery,artillery,3,1,0,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|3|2|1|1,3|2|1|1,,,0
-british-horse-artillery,britain,British Horse Artillery,artillery,3,2,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,3|2|1|1,3|2|1,2|1|1,,0
+british-horse-artillery,britain,British Horse Artillery,artillery,3,2,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,3|2|1|1,2|1|1,3|2|1,,0
 british-rocket-battery,britain,British Rocket Battery,artillery,3,2,0,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,2|2|2|2|2,,,,0
 portuguese-foot-artillery,portugal,Portuguese Foot Artillery,artillery,3,1,0,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|3|2|1|1,3|2|1|1,,,0
 spanish-foot-artillery,spain,Spanish Foot Artillery,artillery,3,1,0,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|3|2|1|1,3|2|1|1,,,0
 austrian-foot-artillery,austria,Austrian Foot Artillery,artillery,3,1,0,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|3|2|1|1,3|2|1|1,,,0
-austrian-horse-artillery,austria,Austrian Horse Artillery,artillery,3,2,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,3|2|1|1,3|2|1,2|1|1,,0
+austrian-horse-artillery,austria,Austrian Horse Artillery,artillery,3,2,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,3|2|1|1,2|1|1,3|2|1,,0
 russian-foot-artillery,russia,Russian Foot Artillery,artillery,3,1,0,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|3|2|1|1,3|2|1|1,,,0
 russian-guard-foot-artillery,russia,Russian Guard Foot Artillery,artillery,3,1,0,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,5|3|2|1|1,4|2|1|1,,,2
-russian-horse-artillery,russia,Russian Horse Artillery,artillery,3,2,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,3|2|1|1,3|2|1,2|1|1,,0
-russian-guard-horse-artillery,russia,Russian Guard Horse Artillery,artillery,3,2,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|2|1|1,4|2|1,3|1|1,,2
+russian-horse-artillery,russia,Russian Horse Artillery,artillery,3,2,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,3|2|1|1,2|1|1,3|2|1,,0
+russian-guard-horse-artillery,russia,Russian Guard Horse Artillery,artillery,3,2,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|2|1|1,3|1|1,4|2|1,,2
 prussian-foot-artillery,prussia,Prussian Foot Artillery,artillery,3,1,0,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|3|2|1|1,3|2|1|1,,,0
-prussian-horse-artillery,prussia,Prussian Horse Artillery,artillery,3,2,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,3|2|1|1,3|2|1,2|1|1,,0
+prussian-horse-artillery,prussia,Prussian Horse Artillery,artillery,3,2,1,0,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,3|2|1|1,2|1|1,3|2|1,,0
 french-light-cavalry,france,French Light Cavalry,cavalry,4,3,3,1,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,TRUE,,,,,0
 french-light-lancer,france,French Light Lancer,cavalry,4,3,3,1,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,TRUE,,,,,0
 french-guard-light-cavalry,france,French Guard Light Cavalry,cavalry,4,3,3,1,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,TRUE,,,,,2
