@@ -64,7 +64,8 @@ struct CombatEntryView: View {
                 if vm.showsBattleBackControls { battleBackSection }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("Combat")
+//            .navigationTitle("Combat")  //commented out to save space on the screen
+            
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -151,65 +152,70 @@ struct CombatEntryView: View {
 
 
             } else {
-                CombatDisclosureRow(label: "Country", selection: vm.attackerCountry,
-                                    options: vm.countryOptions) { vm.attackerCountry = $0 }
+                // Light attacker-side country tint while editing helps the user
+                // see that they reopened the attacker worksheet, not the defender.
+                sideEditorCard(countryID: vm.attackerCountry?.id) {
+                    CombatDisclosureRow(label: "Country", selection: vm.attackerCountry,
+                                        options: vm.countryOptions) { vm.attackerCountry = $0 }
 
-                if vm.attackerCountry != nil {
-                    CombatDisclosureRow(label: "Unit class", selection: vm.attackerClass,
-                                        options: vm.attackerClassOptions) { vm.attackerClass = $0 }
-                }
-                if vm.attackerClass != nil {
-                    CombatDisclosureRow(label: "Unit type", selection: vm.attackerUnit,
-                                        options: vm.attackerUnitOptions) { vm.attackerUnit = $0 }
-                }
-                if vm.attackerUnit != nil {
-                    CombatBlocksRow(
-                        label: "Blocks",
-                        value: vm.attackerBlocks ?? vm.attackerMaxBlocks,
-                        maxBlocks: vm.attackerMaxBlocks,
-                        helperText: vm.attackerBlocksHelperText
-                    ) {
-                        vm.attackerBlocks = $0
+                    if vm.attackerCountry != nil {
+                        CombatDisclosureRow(label: "Unit class", selection: vm.attackerClass,
+                                            options: vm.attackerClassOptions) { vm.attackerClass = $0 }
                     }
-                }
-
-                // Every class asks "Moved This Turn?" (moving into woods/town can
-                // forbid battle). Cavalry needs only yes/no — the distance is
-                // irrelevant — so its stepper is suppressed (`distanceAdjustable:
-                // false`). Infantry/artillery keep yes/no + a hexes-moved stepper
-                // capped at the unit's maxMovement (e.g. artillery maxMovement 2
-                // cannot pick 3).
-                if vm.attackerBlocks != nil {
-                    CombatMovedRow(label: "Moved This Turn?", hexes: vm.attackerMovedHexes,
-                                   maxMoved: vm.maxMovedHexes,
-                                   distanceAdjustable: !vm.usesMovedYesNoOnly) { vm.attackerMovedHexes = $0 }
-                }
-                if vm.attackerMovedHexes != nil {
-                    // PLAYTEST: target distance moved earlier in the flow (was the
-                    // separate "Battle details" extras section). To revert, delete
-                    // this `targetDistanceRow` call, remove the helper below, and
-                    // re-enable `extrasSection` in `body` (see comments there).
-                    targetDistanceRow
-                }
-                if vm.attackerMovedHexes != nil {
-                    // Terrain the attacker fires FROM. Separate from the defender's.
-                    // Unlike the older Napoleonics flow, choosing it does NOT
-                    // immediately collapse the side; the explicit Done button below
-                    // matches the smoother Ancients worksheet behavior.
-                    CombatDisclosureRow(label: "Terrain (fires from)", selection: vm.attackerTerrain,
-                                        options: vm.terrainOptions) {
-                        vm.attackerTerrain = $0
+                    if vm.attackerClass != nil {
+                        CombatDisclosureRow(label: "Unit type", selection: vm.attackerUnit,
+                                            options: vm.attackerUnitOptions) { vm.attackerUnit = $0 }
+                    }
+                    if vm.attackerUnit != nil {
+                        CombatBlocksRow(
+                            label: "Blocks",
+                            value: vm.attackerBlocks ?? vm.attackerMaxBlocks,
+                            maxBlocks: vm.attackerMaxBlocks,
+                            helperText: vm.attackerBlocksHelperText
+                        ) {
+                            vm.attackerBlocks = $0
+                        }
                     }
 
-                    if vm.attackerComplete {
-                        Button("Done") {
-                            attackerHasBeenCompleted = true // Remember that Attacker was completed once so later edits can keep Defender visible.
-                            editingAttacker = false
+                    // Every class asks "Moved This Turn?" (moving into woods/town can
+                    // forbid battle). Cavalry needs only yes/no — the distance is
+                    // irrelevant — so its stepper is suppressed (`distanceAdjustable:
+                    // false`). Infantry/artillery keep yes/no + a hexes-moved stepper
+                    // capped at the unit's maxMovement (e.g. artillery maxMovement 2
+                    // cannot pick 3).
+                    if vm.attackerBlocks != nil {
+                        CombatMovedRow(label: "Moved This Turn?", hexes: vm.attackerMovedHexes,
+                                       maxMoved: vm.maxMovedHexes,
+                                       distanceAdjustable: !vm.usesMovedYesNoOnly) { vm.attackerMovedHexes = $0 }
+                    }
+                    if vm.attackerMovedHexes != nil {
+                        // PLAYTEST: target distance moved earlier in the flow (was the
+                        // separate "Battle details" extras section). To revert, delete
+                        // this `targetDistanceRow` call, remove the helper below, and
+                        // re-enable `extrasSection` in `body` (see comments there).
+                        targetDistanceRow
+                    }
+                    if vm.attackerMovedHexes != nil {
+                        // Terrain the attacker fires FROM. Separate from the defender's.
+                        // Unlike the older Napoleonics flow, choosing it does NOT
+                        // immediately collapse the side; the explicit Done button below
+                        // matches the smoother Ancients worksheet behavior.
+                        CombatDisclosureRow(label: "Terrain (fires from)", selection: vm.attackerTerrain,
+                                            options: vm.terrainOptions) {
+                            vm.attackerTerrain = $0
+                        }
+
+                        if vm.attackerComplete {
+                            Button("Done") {
+                                attackerHasBeenCompleted = true // Remember that Attacker was completed once so later edits can keep Defender visible.
+                                editingAttacker = false
+                            }
                         }
                     }
                 }
 
             }
+
         }
     }
 
@@ -233,52 +239,57 @@ struct CombatEntryView: View {
 
 
             } else {
-                // French rule: a non-France attacker forces the defender to
-                // France, so the Country row is redundant and hidden. It only
-                // appears when the attacker is France (defender must be picked
-                // from the non-France countries).
-                if vm.showsDefenderCountryRow {
-                    CombatDisclosureRow(label: "Country", selection: vm.defenderCountry,
-                                        options: vm.defenderCountryOptions) { vm.defenderCountry = $0 }
-                } else if let country = vm.defenderCountry {
-                    LabeledContent("Country", value: country.title)
-                }
-
-                if vm.defenderCountry != nil {
-                    CombatDisclosureRow(label: "Unit class", selection: vm.defenderClass,
-                                        options: vm.defenderClassOptions) { vm.defenderClass = $0 }
-                }
-                if vm.defenderClass != nil {
-                    CombatDisclosureRow(label: "Unit type", selection: vm.defenderUnit,
-                                        options: vm.defenderUnitOptions) { vm.defenderUnit = $0 }
-                }
-                if vm.defenderUnit != nil {
-                    CombatBlocksRow(
-                        label: "Blocks",
-                        value: vm.defenderBlocks ?? vm.defenderMaxBlocks,
-                        maxBlocks: vm.defenderMaxBlocks,
-                        helperText: vm.defenderBlocksHelperText
-                    ) {
-                        vm.defenderBlocks = $0
-                    }
-                }
-
-                if vm.defenderBlocks != nil {
-                    // Terrain the defender OCCUPIES — chosen independently because
-                    // the two units are at least one hex apart. Like Ancients, keep
-                    // the side open until the user explicitly taps Done.
-                    CombatDisclosureRow(label: "Terrain (occupies)", selection: vm.defenderTerrain,
-                                        options: vm.terrainOptions) {
-                        vm.defenderTerrain = $0
+                // Light defender-side country tint while editing helps the user
+                // see that they reopened the defender worksheet, not the attacker.
+                sideEditorCard(countryID: vm.defenderCountry?.id) {
+                    // French rule: a non-France attacker forces the defender to
+                    // France, so the Country row is redundant and hidden. It only
+                    // appears when the attacker is France (defender must be picked
+                    // from the non-France countries).
+                    if vm.showsDefenderCountryRow {
+                        CombatDisclosureRow(label: "Country", selection: vm.defenderCountry,
+                                            options: vm.defenderCountryOptions) { vm.defenderCountry = $0 }
+                    } else if let country = vm.defenderCountry {
+                        LabeledContent("Country", value: country.title)
                     }
 
-                    if vm.defenderComplete {
-                        Button("Done") {
-                            editingDefender = false
+                    if vm.defenderCountry != nil {
+                        CombatDisclosureRow(label: "Unit class", selection: vm.defenderClass,
+                                            options: vm.defenderClassOptions) { vm.defenderClass = $0 }
+                    }
+                    if vm.defenderClass != nil {
+                        CombatDisclosureRow(label: "Unit type", selection: vm.defenderUnit,
+                                            options: vm.defenderUnitOptions) { vm.defenderUnit = $0 }
+                    }
+                    if vm.defenderUnit != nil {
+                        CombatBlocksRow(
+                            label: "Blocks",
+                            value: vm.defenderBlocks ?? vm.defenderMaxBlocks,
+                            maxBlocks: vm.defenderMaxBlocks,
+                            helperText: vm.defenderBlocksHelperText
+                        ) {
+                            vm.defenderBlocks = $0
+                        }
+                    }
+
+                    if vm.defenderBlocks != nil {
+                        // Terrain the defender OCCUPIES — chosen independently because
+                        // the two units are at least one hex apart. Like Ancients, keep
+                        // the side open until the user explicitly taps Done.
+                        CombatDisclosureRow(label: "Terrain (occupies)", selection: vm.defenderTerrain,
+                                            options: vm.terrainOptions) {
+                            vm.defenderTerrain = $0
+                        }
+
+                        if vm.defenderComplete {
+                            Button("Done") {
+                                editingDefender = false
+                            }
                         }
                     }
                 }
             }
+
         }
     }
 
@@ -501,6 +512,33 @@ struct CombatEntryView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)) // Keep the grouped box soft and Apple-like.
     }
 
+    /// Lightly tint the expanded side editor with that side's country color.
+    /// This mirrors the collapsed country-colored summary box, but at a softer
+    /// strength so users can tell which side they are editing without making
+    /// the form controls feel heavy or noisy.
+    @ViewBuilder
+    private func sideEditorCard<Content: View>(
+        countryID: String?,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let tint = Color.battleCalcCountry(countryID ?? "")
+
+        VStack(alignment: .leading, spacing: 12) {
+            content()
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(tint.opacity(countryID == nil ? 0.04 : 0.10)) // Lighter than the collapsed summary so this reads as edit-state context, not a banner.
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(tint.opacity(countryID == nil ? 0.06 : 0.16), lineWidth: 1) // Gentle border helps the active side read as one grouped worksheet area.
+        )
+    }
+
+
 
     // MARK: - Result (auto-shown)
     @ViewBuilder private var resultSection: some View {
@@ -554,17 +592,27 @@ struct CombatEntryView: View {
                     LabeledContent("Defender blocks remaining",
                                    value: "\(vm.defenderRemainingBlocks ?? upper) / \(upper)")
                 }
-                Text("Important: Update the (original) defender's block strength, then battle back. If the defender is eliminated, it cannot battle back.")
-                    .font(.caption).foregroundStyle(.secondary)
+                
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Button("Battle Back") { vm.performBattleBack() }
+                        .buttonStyle(.bordered) // Slightly smaller so the result can live on the same line more often.
+                        .disabled(!vm.canBattleBack)
 
-                Button("Battle Back") { vm.performBattleBack() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!vm.canBattleBack)
+                    if let b = vm.battleBackBreakdown, b.isAllowed {
+                        HStack(spacing: 4) {
+                            Text("\(b.mode): Final Dice:")
+                            Text("\(b.final)").bold()
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 0)
+                }
 
                 if let b = vm.battleBackBreakdown {
                     if b.isAllowed {
-                        Text("Defender battles back (melee, 1 hex):")
-                            .font(.caption).foregroundStyle(.secondary)
                         ResultBreakdownView(breakdown: b)
                     } else {
                         Label("Battle back not allowed", systemImage: "xmark.octagon")
@@ -574,6 +622,7 @@ struct CombatEntryView: View {
                         }
                     }
                 }
+
             }
         }
     }
