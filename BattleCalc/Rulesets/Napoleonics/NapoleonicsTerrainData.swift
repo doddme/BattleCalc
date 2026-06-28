@@ -18,13 +18,32 @@ struct TerrainDefinition: Codable, Identifiable, Hashable {
     let blocksBattleOnEntry: Bool
     let blocksLineOfSight: Bool
 
+    // Base "attacking into this terrain" penalties. These apply to normal
+    // into-terrain handling for both ranged and melee unless a melee-only
+    // extra penalty is also present.
     let infantryIntoPenalty: Int
     let cavalryIntoPenalty: Int
     let artilleryIntoPenalty: Int
 
     let infantryOutPenalty: Int
     let cavalryOutPenalty: Int
-    let artilleryOutPenalty: Int
+
+    // Optional because some terrain/unit combinations are not just "0 dice" or
+    // "a penalty" — they are not allowed at all. Example: artillery attacking
+    // out of Sand Quarry.
+    let artilleryOutPenalty: Int?
+
+
+    // Extra melee-only "into terrain" penalties. These are added on top of the
+    // normal INTO penalty only when the attack is close combat (distance 1).
+    // Example: Marsh can be 0 for normal INTO, but -1 here for melee INTO.
+    let infantryMeleeIntoPenalty: Int
+    let cavalryMeleeIntoPenalty: Int
+    let artilleryMeleeIntoPenalty: Int
+
+    // Whether an infantry defender on this terrain may form square when charged
+    // by cavalry. FALSE means we should surface "MAY NOT FORM SQUARE".
+    let mayFormSquare: Bool
 }
 
 /// Raw CSV row model.
@@ -40,7 +59,12 @@ private struct TerrainCSVRow {
     let infantryOutPenalty: String
     let cavalryOutPenalty: String
     let artilleryOutPenalty: String
+    let infantryMeleeIntoPenalty: String
+    let cavalryMeleeIntoPenalty: String
+    let artilleryMeleeIntoPenalty: String
+    let mayFormSquare: String
 }
+
 
 enum TerrainLoadError: Error, LocalizedError {
     case fileNotFound(String)
@@ -100,9 +124,10 @@ enum NapoleonicsTerrainCSVLoader {
                 .split(separator: ",", omittingEmptySubsequences: false)
                 .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
 
-            // We only care about the first 10 real columns.
-            // Extra trailing empty CSV columns are ignored.
-            guard columns.count >= 10 else {
+            // Napoleonics terrain now includes 14 meaningful columns:
+            // the original INTO/OUT values, three melee-only INTO values,
+            // and the MayFormSquare flag.
+            guard columns.count >= 14 else {
                 throw TerrainLoadError.invalidRow(line)
             }
 
@@ -116,8 +141,13 @@ enum NapoleonicsTerrainCSVLoader {
                 artilleryIntoPenalty: columns[6],
                 infantryOutPenalty: columns[7],
                 cavalryOutPenalty: columns[8],
-                artilleryOutPenalty: columns[9]
+                artilleryOutPenalty: columns[9],
+                infantryMeleeIntoPenalty: columns[10],
+                cavalryMeleeIntoPenalty: columns[11],
+                artilleryMeleeIntoPenalty: columns[12],
+                mayFormSquare: columns[13]
             )
+
 
             let terrain = try makeTerrainDefinition(from: row)
             terrains.append(terrain)
@@ -140,6 +170,8 @@ enum NapoleonicsTerrainCSVLoader {
                 field: "blocksLineOfSight",
                 terrainID: row.id
             ),
+
+            // Base INTO penalties used in all attack modes.
             infantryIntoPenalty: try parseInt(
                 row.infantryIntoPenalty,
                 field: "InfantryINTOPenalty",
@@ -155,6 +187,7 @@ enum NapoleonicsTerrainCSVLoader {
                 field: "ArtilleryINTOPenalty",
                 terrainID: row.id
             ),
+
             infantryOutPenalty: try parseInt(
                 row.infantryOutPenalty,
                 field: "InfantryOutPenalty",
@@ -165,13 +198,44 @@ enum NapoleonicsTerrainCSVLoader {
                 field: "CavalryOutPenalty",
                 terrainID: row.id
             ),
-            artilleryOutPenalty: try parsePenaltyAllowingNA(
+            // "NA" means this unit/terrain interaction is not allowed at all,
+            // not a numeric penalty. Keep that distinction in the model so the
+            // evaluator can block the attack and tell the user why.
+            artilleryOutPenalty: try parseOptionalPenaltyAllowingNA(
                 row.artilleryOutPenalty,
                 field: "ArtilleryOutPenalty",
+                terrainID: row.id
+            ),
+
+
+            // Extra melee-only INTO penalties. Keep these data-driven so special
+            // terrain like Marsh / Sand Quarry / Fordable River needs no
+            // hardcoded terrain-name logic in the evaluator.
+            infantryMeleeIntoPenalty: try parseInt(
+                row.infantryMeleeIntoPenalty,
+                field: "InfantryMeleeINTO",
+                terrainID: row.id
+            ),
+            cavalryMeleeIntoPenalty: try parseInt(
+                row.cavalryMeleeIntoPenalty,
+                field: "CavalryMeleeINTO",
+                terrainID: row.id
+            ),
+            artilleryMeleeIntoPenalty: try parseInt(
+                row.artilleryMeleeIntoPenalty,
+                field: "ArtilleryMeleeINTO",
+                terrainID: row.id
+            ),
+
+            // Square eligibility is terrain-owned data.
+            mayFormSquare: try parseBool(
+                row.mayFormSquare,
+                field: "MayFormSquare",
                 terrainID: row.id
             )
         )
     }
+
 
     private static func parseBool(
         _ value: String,
@@ -199,20 +263,26 @@ enum NapoleonicsTerrainCSVLoader {
         return intValue
     }
 
-    /// For now, treat "NA" as 0 so the loader can succeed with the current CSV.
-    /// If you later want "NA" to mean illegal or unsupported terrain interaction,
-    /// this is the one place to change that behavior.
-    private static func parsePenaltyAllowingNA(
+    /// Parses a terrain penalty field that may use "NA" to mean "this terrain /
+    /// unit interaction is not allowed at all" rather than a numeric modifier.
+    ///
+    /// Returns:
+    /// - Int value for normal numeric penalties
+    /// - nil for "NA" (illegal / not allowed)
+    private static func parseOptionalPenaltyAllowingNA(
         _ value: String,
         field: String,
         terrainID: String
-    ) throws -> Int {
-        if value.uppercased() == "NA" {
-            return 0
+    ) throws -> Int? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmed.uppercased() == "NA" {
+            return nil
         }
 
-        return try parseInt(value, field: field, terrainID: terrainID)
+        return try parseInt(trimmed, field: field, terrainID: terrainID)
     }
+
 }
 
 /// Runtime terrain lookup used by the combat evaluator.

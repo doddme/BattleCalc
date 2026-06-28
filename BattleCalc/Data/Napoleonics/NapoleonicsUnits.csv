@@ -1,13 +1,13 @@
 id,countryID,name,unitClass,maxBlocks,maxMovement,maxMovementToShoot,range,standingFireRule,movingFireRule,meleeDiceRule,meleeBonusVsInfantry,canBattleAfterEnteringTerrainIDs,hasSaber,isMeleeOnly,artilleryStandingMultiBlock,artilleryStandingSingleBlock,artilleryMovingMultiBlock,artilleryMovingSingleBlock,ignoreFlags
 french-line-infantry,france,French Line Infantry,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedUp,currentBlocks,TRUE,,TRUE,,,,,,0
-french-light-infantry,france,French Light Infantry,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocks,FALSE,forest|walled-garden|church|walled-farm,TRUE,,,,,,0
+french-light-infantry,france,French Light Infantry,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocks,FALSE,forest|walled-garden,TRUE,,,,,,0
 french-grenadier,france,French Grenadier,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedUp,currentBlocksPlusOne,FALSE,,TRUE,,,,,,1
-french-young-guard,france,French Young Guard,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocksPlusOne,FALSE,forest|walled-garden|church|walled-farm,TRUE,,,,,,1
+french-young-guard,france,French Young Guard,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocksPlusOne,FALSE,forest|walled-garden,TRUE,,,,,,1
 french-old-guard,france,French Old Guard,infantry,4,1,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocksPlusTwo,FALSE,,TRUE,,,,,,2
 french-militia,france,French Militia,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedUp,currentBlocks,FALSE,,FALSE,,,,,,0
 british-line-infantry,britain,British Line,infantry,4,1,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUp,currentBlocks,FALSE,,TRUE,,,,,,0
-british-light-infantry,britain,British Light Infantry,infantry,5,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocks,FALSE,forest|walled-garden|church|walled-farm,TRUE,,,,,,0
-british-rifles,britain,British Rifles,infantry,3,2,1,3,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocks,FALSE,forest|walled-garden|church|walled-farm,FALSE,,,,,,0
+british-light-infantry,britain,British Light Infantry,infantry,5,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocks,FALSE,forest|walled-garden,TRUE,,,,,,0
+british-rifles,britain,British Rifles,infantry,3,2,1,3,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocks,FALSE,forest|walled-garden,FALSE,,,,,,0
 british-grenadier,britain,British Grenadier,infantry,4,1,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocksPlusOne,FALSE,,TRUE,,,,,,1
 british-guard_grenadier,britain,British Guard Grenadier,infantry,5,1,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocksPlusOne,FALSE,,TRUE,,,,,,2
 british-highland,britain,British Highland,infantry,4,1,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUp,currentBlocks,FALSE,,FALSE,,,,,,1
@@ -15,24 +15,24 @@ portuguese-line-infantry,portugal,Portuguese Line Infantry,infantry,4,1,1,2,curr
 portuguese-light-infantry,portugal,Portuguese Light Infantry,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocks,FALSE,,TRUE,,,,,,0
 portuguese-militia-infantry,portugal,Portuguese Militia,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocks,FALSE,,FALSE,,,,,,0
 spanish-line-infantry,spain,Spanish Line Infantry,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedDownMinusOne,currentBlocksMinusOneIfMoved,FALSE,,TRUE,,,,,,0
-spanish-light-infantry,spain,Spanish Light Infantry,infantry,5,2,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocksMinusOneIfMoved,FALSE,forest|walled-garden|church|walled-farm,TRUE,,,,,,0
+spanish-light-infantry,spain,Spanish Light Infantry,infantry,5,2,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocksMinusOneIfMoved,FALSE,forest|walled-garden,TRUE,,,,,,0
 spanish-grenadier,spain,Spanish Grenadier,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocksMinusOneIfMoved,FALSE,,TRUE,,,,,,1
 spanish-militia,spain,Spanish Militia,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedDownMinusOne,currentBlocksMinusOneIfMoved,FALSE,,FALSE,,,,,,0
 russian-line-infantry,russia,Russian Line Infantry,infantry,3,1,1,2,currentBlocks,halfCurrentBlocksRoundedUp,currentBlocks,FALSE,,TRUE,,,,,,1
-russian-light-infantry,russia,Russian Light Infantry,infantry,3,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocks,FALSE,forest|walled-garden|church|walled-farm,TRUE,,,,,,1
+russian-light-infantry,russia,Russian Light Infantry,infantry,3,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocks,FALSE,forest|walled-garden,TRUE,,,,,,1
 russian-grenadier,russia,Russian Grenadier,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedUp,currentBlocksPlusOne,FALSE,,TRUE,,,,,,1
-russian-guard-light-infantry,russia,Russian Guard Light Infantry,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocks,FALSE,forest|walled-garden|church|walled-farm,TRUE,,,,,,2
+russian-guard-light-infantry,russia,Russian Guard Light Infantry,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocks,FALSE,forest|walled-garden,TRUE,,,,,,2
 russian-guard-grenadier,russia,Russian Guard Grenadier,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedUpPlusOne,currentBlocksPlusOne,FALSE,,TRUE,,,,,,2
 russian-militia,russia,Russian Militia,infantry,4,2,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocks,FALSE,,FALSE,,,,,,0
 prussian-line-infantry,prussia,Prussian Line Infantry,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocksPlusOne,FALSE,,TRUE,,,,,,0
-prussian-light-infantry,prussia,Prussian Light Infantry,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocks,FALSE,forest|walled-garden|church|walled-farm,TRUE,,,,,,0
+prussian-light-infantry,prussia,Prussian Light Infantry,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocks,FALSE,forest|walled-garden,TRUE,,,,,,0
 prussian-grenadier,prussia,Prussian Grenadier,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocksPlusOne,FALSE,,TRUE,,,,,,1
 prussian-guard-grenadier,prussia,Prussian Guard Grenadier,infantry,4,1,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocksPlusOne,FALSE,,TRUE,,,,,,2
 prussian-reserve-infantry,prussia,Prussian Reserve Infantry,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocks,FALSE,,TRUE,,,,,,0
 prussian-militia,prussia,Prussian Militia,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocks,FALSE,,FALSE,,,,,,0
 austrian-line-infantry,austria,Austrian Line Infantry,infantry,5,1,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocks,FALSE,,TRUE,,,,,,0
-austrian-light-infantry,austria,Austrian Light Infantry,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocks,FALSE,forest|walled-garden|church|walled-farm,TRUE,,,,,,0
-austrian-grenzer-infantry,austria,Austrian Grenzer Infantry,infantry,4,1,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocks,FALSE,forest|walled-garden|church|walled-farm,FALSE,,,,,,0
+austrian-light-infantry,austria,Austrian Light Infantry,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocks,FALSE,forest|walled-garden,TRUE,,,,,,0
+austrian-grenzer-infantry,austria,Austrian Grenzer Infantry,infantry,4,1,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocks,FALSE,forest|walled-garden,FALSE,,,,,,0
 austrian-grenadier,austria,Austrian Grenadier,infantry,4,1,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocksPlusOne,FALSE,,TRUE,,,,,,1
 austrian-militia,austria,Austrian Militia,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocks,FALSE,,FALSE,,,,,,0
 french-foot-artillery,france,French Foot Artillery,artillery,3,1,0,5,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|3|2|1|1,3|2|1|1,,,0

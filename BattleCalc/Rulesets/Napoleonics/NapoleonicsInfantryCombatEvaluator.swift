@@ -67,8 +67,23 @@ struct NapoleonicsInfantryCombatEvaluator {
             )
         }
 
+        // Special terrain/unit legality check:
+        // some terrain rows use ArtilleryOutPenalty = NA to mean artillery may
+        // not battle from that terrain at all. This is not a 0-dice case and
+        // not a numeric penalty — it is an illegal attack state that must be
+        // surfaced clearly to the player.
+        if attacker.unitClass == .artillery,
+           let attackerTerrain,
+           attackerTerrain.artilleryOutPenalty == nil {
+            return blockedResult(
+                reason: "\(attacker.name) may not battle from \(attackerTerrain.name).",
+                ruleID: "napoleonics.terrain.artilleryCannotBattleFromTerrain"
+            )
+        }
+
         // Class dispatch. Infantry keeps the original melee/ranged paths
         // unchanged. Cavalry and artillery have their own evaluators (Phase 2).
+
         switch attacker.unitClass {
         case .infantry:
             switch context.combatMode {
@@ -206,7 +221,14 @@ struct NapoleonicsInfantryCombatEvaluator {
             }
             
             if let defenderTerrain {
-                let penalty = intoPenalty(for: attacker.unitClass, terrain: defenderTerrain)
+                // This is the melee path, so include any melee-only INTO penalty
+                // from the defender's terrain in addition to the base INTO value.
+                let penalty = intoPenalty(
+                    for: attacker.unitClass,
+                    terrain: defenderTerrain,
+                    isMelee: true
+                )
+
                 
                 if penalty != 0 {
                     modifiers.append(
@@ -394,7 +416,14 @@ struct NapoleonicsInfantryCombatEvaluator {
             }
 
             if let defenderTerrain {
-                let penalty = intoPenalty(for: attacker.unitClass, terrain: defenderTerrain)
+                // This is the ranged-fire path, so do NOT include the melee-only
+                // INTO penalty. Use only the normal defender INTO terrain value.
+                let penalty = intoPenalty(
+                    for: attacker.unitClass,
+                    terrain: defenderTerrain,
+                    isMelee: false
+                )
+
 
                 if penalty != 0 {
                     modifiers.append(
@@ -630,6 +659,7 @@ struct NapoleonicsInfantryCombatEvaluator {
 
             let combinedBonus = combinedArtilleryBonusDice(
                 supportingUnit: supportingUnit,
+                defender: defender, // Pass the real defender so support dice can apply attacker-vs-defender melee bonuses.
                 supportingUnitBlocks: supportingUnitBlocks,
                 supportingUnitTerrainID: context.supportingUnitTerrainID,
                 defenderTerrainID: context.defenderTerrainID,
@@ -637,6 +667,7 @@ struct NapoleonicsInfantryCombatEvaluator {
                 supportingUnitMovedIntoMelee: context.supportingUnitMovedIntoMelee,
                 supportingUnitCountryID: context.supportingUnitCountryID
             )
+
 
 
 
@@ -710,6 +741,7 @@ struct NapoleonicsInfantryCombatEvaluator {
 
     private func combinedArtilleryBonusDice(
         supportingUnit: UnitDefinition,
+        defender: UnitDefinition,
         supportingUnitBlocks: Int,
         supportingUnitTerrainID: String?,
         defenderTerrainID: String?,
@@ -717,6 +749,7 @@ struct NapoleonicsInfantryCombatEvaluator {
         supportingUnitMovedIntoMelee: Bool,
         supportingUnitCountryID: String?
     ) -> CombinedArtilleryBonus {
+
 
         let supportingTerrain = NapoleonicsTerrainLibrary.terrain(for: supportingUnitTerrainID)
         let defenderTerrain = NapoleonicsTerrainLibrary.terrain(for: defenderTerrainID)
@@ -789,17 +822,46 @@ struct NapoleonicsInfantryCombatEvaluator {
         } ?? 0
 
         let defenderIntoModifier = defenderTerrain.map {
-            intoPenalty(for: supportingUnit.unitClass, terrain: $0)
+            // Supporting-unit contribution is melee support, so the defender's
+            // terrain should include any melee-only INTO penalty here too.
+            intoPenalty(
+                for: supportingUnit.unitClass,
+                terrain: $0,
+                isMelee: true
+            )
         } ?? 0
 
+        // Combined-arms support should honor the same melee-vs-defender rule
+        // interactions as a normal melee attack. This fixes cases like French
+        // Line Infantry gaining +1 die when the support unit is attacking an
+        // infantry defender.
+        let meleeVsInfantryModifier: Int
+        if supportingUnit.combatProfile.bonuses.meleeBonusVsInfantry,
+           defender.unitClass == .infantry,
+           !supportingUnitInSquare {
+            meleeVsInfantryModifier = 1
+        } else {
+            meleeVsInfantryModifier = 0
+        }
+
         let terrainModifier = attackerOutModifier + defenderIntoModifier
-        let bonusDice = max(0, baseBonusDice + terrainModifier + spanishMovedModifier)
+        let bonusDice = max(
+            0,
+            baseBonusDice
+                + meleeVsInfantryModifier
+                + terrainModifier
+                + spanishMovedModifier
+        )
 
         let armName = supportingUnit.unitClass.rawValue.capitalized
         let countryName = (supportingUnitCountryID ?? supportingUnit.countryID).capitalized
         let dieWord = bonusDice == 1 ? "die" : "dice"
 
         var supportBreakdown = "Supporting \(armName.lowercased()) base dice \(baseBonusDice)"
+
+        if meleeVsInfantryModifier != 0 {
+            supportBreakdown += "; melee vs infantry +\(meleeVsInfantryModifier) die" // Mirror the normal melee +1 vs infantry rule in the compact support summary.
+        }
 
         if attackerOutModifier != 0, let supportingTerrain {
             supportBreakdown += "; attacking out of \(supportingTerrain.name) \(attackerOutModifier) dice" // Keep the short Results wording tied to the supporting unit's own terrain.
@@ -814,6 +876,7 @@ struct NapoleonicsInfantryCombatEvaluator {
         }
 
         supportBreakdown += "; net \(bonusDice) \(dieWord)"
+
 
         notes.append("combinedArmsBonus:\(supportBreakdown)") // Prefix the note so the Results builder can surface it as a dedicated line without guessing.
 
@@ -914,7 +977,16 @@ struct NapoleonicsInfantryCombatEvaluator {
         }
 
         if let defenderTerrain {
-            let penalty = intoPenalty(for: attacker.unitClass, terrain: defenderTerrain)
+            // Melee uses base INTO + melee-only INTO. Ranged uses only the base
+            // INTO value. We infer melee/ranged from the rule namespace because
+            // this helper is shared by both paths.
+            let isMelee = ruleNamespace.contains(".melee")
+            let penalty = intoPenalty(
+                for: attacker.unitClass,
+                terrain: defenderTerrain,
+                isMelee: isMelee
+            )
+
             if penalty != 0 {
                 modifiers.append(
                     CombatModifier(
@@ -934,6 +1006,7 @@ struct NapoleonicsInfantryCombatEvaluator {
             }
         }
     }
+
 
     // MARK: - Special Case Rules
 
@@ -988,8 +1061,16 @@ struct NapoleonicsInfantryCombatEvaluator {
         }
 
         let out = attackerTerrain.map { outPenalty(for: attacker.unitClass, terrain: $0) } ?? 0
-        let into = defenderTerrain.map { intoPenalty(for: attacker.unitClass, terrain: $0) } ?? 0
+
+        // Close combat gets the extra melee-only INTO penalty on top of the
+        // base INTO value for special terrain such as Marsh / Sand Quarry /
+        // Fordable River.
+        let into = defenderTerrain.map {
+            intoPenalty(for: attacker.unitClass, terrain: $0, isMelee: true)
+        } ?? 0
+
         return out + into
+
     }
 
     
@@ -1154,19 +1235,32 @@ struct NapoleonicsInfantryCombatEvaluator {
 
     // MARK: - Terrain Helpers
 
+    /// Base "into terrain" penalty, with optional melee-only extra penalty added
+    /// when the attack is close combat. This keeps special melee-into terrain
+    /// rules fully data-driven in the terrain CSV.
     private func intoPenalty(
         for unitClass: UnitClass,
-        terrain: TerrainDefinition
+        terrain: TerrainDefinition,
+        isMelee: Bool
     ) -> Int {
+        let basePenalty: Int
+        let meleeOnlyPenalty: Int
+
         switch unitClass {
         case .infantry:
-            return terrain.infantryIntoPenalty
+            basePenalty = terrain.infantryIntoPenalty
+            meleeOnlyPenalty = terrain.infantryMeleeIntoPenalty
         case .cavalry:
-            return terrain.cavalryIntoPenalty
+            basePenalty = terrain.cavalryIntoPenalty
+            meleeOnlyPenalty = terrain.cavalryMeleeIntoPenalty
         case .artillery:
-            return terrain.artilleryIntoPenalty
+            basePenalty = terrain.artilleryIntoPenalty
+            meleeOnlyPenalty = terrain.artilleryMeleeIntoPenalty
         }
+
+        return basePenalty + (isMelee ? meleeOnlyPenalty : 0)
     }
+
 
     private func outPenalty(
         for unitClass: UnitClass,
@@ -1178,9 +1272,13 @@ struct NapoleonicsInfantryCombatEvaluator {
         case .cavalry:
             return terrain.cavalryOutPenalty
         case .artillery:
-            return terrain.artilleryOutPenalty
+            // Nil means "not allowed" and should already have been blocked
+            // earlier in evaluateResolvedUnits(...). Returning 0 here keeps this
+            // helper total-safe if it is ever reached unexpectedly.
+            return terrain.artilleryOutPenalty ?? 0
         }
     }
+
 
     // MARK: - Result Helper
     

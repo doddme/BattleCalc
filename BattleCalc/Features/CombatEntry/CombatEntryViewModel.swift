@@ -402,9 +402,19 @@ final class CombatEntryViewModel: ObservableObject {
         return parts.isEmpty ? nil : parts.joined(separator: " • ")
     }
 
-    /// Short artillery helper based on the *current* active fire band.
-    /// Example: "Range 5 • 3|2|1|1|1". This reflects current blocks and whether
-    /// the unit moved, so the reminder matches the actual attack state.
+    /// Short artillery helper for the collapsed attacker summary.
+    ///
+    /// IMPORTANT:
+    /// For Napoleonics artillery we want the collapsed display to mirror the
+    /// exact CSV value the player is currently using:
+    /// - standing + multi-block  -> artilleryStandingMultiBlock
+    /// - moving   + multi-block  -> artilleryMovingMultiBlock
+    /// - standing + single-block -> artilleryStandingSingleBlock
+    /// - moving   + single-block -> artilleryMovingSingleBlock
+    ///
+    /// That keeps the collapsed reminder aligned with the actual current table,
+    /// including cases where moving shortens both the displayed range and the
+    /// shown dice distribution (for example 3|2|1 instead of 3|2|1|1).
     private func artilleryHelperText(for unit: UnitDefinition) -> String? {
         guard unit.unitClass == .artillery,
               let tables = unit.combatProfile.artilleryFireTables else { return nil }
@@ -412,24 +422,34 @@ final class CombatEntryViewModel: ObservableObject {
         let moved = (attackerMovedHexes ?? 0) > 0
         let singleBlock = (attackerBlocks ?? attackerMaxBlocks) <= 1
 
-        guard let band = artilleryActiveBand(
-            tables: tables,
-            moved: moved,
-            singleBlock: singleBlock
-        ) else {
-            return "No fire after moving" // Covers cases like foot artillery after moving.
+        // Pick the exact currently-active artillery table. This keeps the
+        // collapsed summary tied to the same moving/standing + blocks state
+        // the combat engine is actually using.
+        let band: ArtilleryFireBand?
+        switch (moved, singleBlock) {
+        case (false, false): band = tables.standingMultiBlock
+        case (false, true):  band = tables.standingSingleBlock
+        case (true, false):  band = tables.movingMultiBlock
+        case (true, true):   band = tables.movingSingleBlock
         }
 
+        // Covers cases like foot artillery after moving when no fire band exists.
+        guard let band else { return "Cannot fire after moving" }
+
+        // Range is the highest usable distance in the currently active table.
         let derivedRange = artilleryDerivedRange(band)
         guard derivedRange > 0 else { return nil }
 
-        let diceByDistance = band.prefix(derivedRange).map { slot in
-            if let slot { return String(slot) }
-            return "-"
-        }.joined(separator: "|")
+        // Show only the usable part of the active table in the same pipe-delimited
+        // format used in the CSV-derived artillery data, e.g. 3|2|1|1 or 3|2|1.
+        let diceByDistance = band
+            .prefix(derivedRange)
+            .compactMap { $0.map(String.init) }
+            .joined(separator: "|")
 
         return "Range \(derivedRange) • \(diceByDistance)"
     }
+
 
 
     /// Upper bound for the distance stepper. Cavalry -> 1; artillery -> its
@@ -620,11 +640,20 @@ final class CombatEntryViewModel: ObservableObject {
             return nil
         }
 
-        // Cavalry attacks are always melee, so infantry defenders can be reminded
-        // here to consider Square against the current cavalry attacker.
+        // Cavalry attacks are always melee, so infantry defenders may be able
+        // to form square. But this is terrain-dependent in Napoleonics:
+        // some terrain (for example Town) does not allow square formation.
         if attacker.unitClass == .cavalry && defender.unitClass == .infantry {
-            return "MAY FORM SQUARE"
+            // CombatEntry stores the picked terrain as a CombatPickItem. Resolve
+            // that pick back into the full Napoleonics terrain definition so the
+            // reminder can respect terrain-based square restrictions.
+            let mayFormSquare = defenderTerrain
+                .flatMap { NapoleonicsTerrainLibrary.terrain(for: $0.id) }?
+                .mayFormSquare ?? true
+
+            return mayFormSquare ? "MAY FORM SQUARE" : "MAY NOT FORM SQUARE"
         }
+
 
         // Infantry melee attacks against cavalry should prompt the attacking
         // player to ask whether the defending cavalry wants to Retire and Reform.
@@ -634,6 +663,7 @@ final class CombatEntryViewModel: ObservableObject {
 
         return nil
     }
+
 
 
 
