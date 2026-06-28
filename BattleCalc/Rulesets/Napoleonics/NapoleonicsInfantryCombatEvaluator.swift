@@ -20,8 +20,11 @@ struct NapoleonicsInfantryCombatEvaluator {
     /// Main entry point for one combat calculation.
     /// This version resolves the attacker and defender from the IDs
     /// stored in CombatContext, so the runtime state drives the lookup.
+    ///
+    
+    
     func evaluate(context: CombatContext) -> CombatResult {
-
+        //var unitReminders: [String] = []
         // Resolve the attacking unit from the runtime attackerUnitID.
         guard let attacker = NapoleonicsUnitLibrary.unit(for: context.attackerUnitID) else {
             return blockedResult(
@@ -37,7 +40,7 @@ struct NapoleonicsInfantryCombatEvaluator {
                 ruleID: "napoleonics.lookup.missingDefender"
             )
         }
-
+        
         return evaluateResolvedUnits(
             context: context,
             attacker: attacker,
@@ -119,7 +122,7 @@ struct NapoleonicsInfantryCombatEvaluator {
         
         let attackerTerrain = NapoleonicsTerrainLibrary.terrain(for: context.attackerTerrainID)
         let defenderTerrain = NapoleonicsTerrainLibrary.terrain(for: context.defenderTerrainID)
-
+        //var unitReminders : [String] = []
         var modifiers: [CombatModifier] = []
         var appliedRules: [AppliedRule] = [
             AppliedRule(
@@ -131,7 +134,6 @@ struct NapoleonicsInfantryCombatEvaluator {
                     movedHexes: context.movedHexes ?? 0,
                     result: baseDice
                 )
-
             )
         ]
 
@@ -182,7 +184,7 @@ struct NapoleonicsInfantryCombatEvaluator {
         } else {
             if let attackerTerrain {
                 let penalty = outPenalty(for: attacker.unitClass, terrain: attackerTerrain)
-
+                
                 if penalty != 0 {
                     modifiers.append(
                         CombatModifier(
@@ -192,7 +194,7 @@ struct NapoleonicsInfantryCombatEvaluator {
                             detail: "Attacking out of \(attackerTerrain.name) affected melee."
                         )
                     )
-
+                    
                     appliedRules.append(
                         AppliedRule(
                             ruleID: "napoleonics.melee.attackerTerrainOut",
@@ -202,10 +204,10 @@ struct NapoleonicsInfantryCombatEvaluator {
                     )
                 }
             }
-
+            
             if let defenderTerrain {
                 let penalty = intoPenalty(for: attacker.unitClass, terrain: defenderTerrain)
-
+                
                 if penalty != 0 {
                     modifiers.append(
                         CombatModifier(
@@ -215,7 +217,7 @@ struct NapoleonicsInfantryCombatEvaluator {
                             detail: "Attacking into \(defenderTerrain.name) affected melee."
                         )
                     )
-
+                    
                     appliedRules.append(
                         AppliedRule(
                             ruleID: "napoleonics.melee.defenderTerrainInto",
@@ -225,6 +227,11 @@ struct NapoleonicsInfantryCombatEvaluator {
                     )
                 }
             }
+            
+            //let ignoreFlagsString : String = ignoreFlagMessage(for: defender)
+            //if !ignoreFlagsString.isEmpty {
+             //   unitReminders.append(ignoreFlagsString)
+            //}
         }
 
         let modifierTotal = modifiers.map(\.value).reduce(0, +)
@@ -249,6 +256,9 @@ struct NapoleonicsInfantryCombatEvaluator {
             finalDice: finalDice,
             notes: ["Napoleonics infantry melee evaluation."],
             appliedRules: appliedRules
+            //,
+            //unitReminders: unitReminders
+            
         )
     }
 
@@ -262,6 +272,8 @@ struct NapoleonicsInfantryCombatEvaluator {
         defender: UnitDefinition
     ) -> CombatResult {
 
+        //Removed moved to CombatEntryviewModel.
+        //var unitReminders : [String] = []
         guard let distance = context.targetDistance else {
             return blockedResult(
                 reason: "Ranged attacks require a target distance.",
@@ -299,6 +311,7 @@ struct NapoleonicsInfantryCombatEvaluator {
         var appliedRules: [AppliedRule] = []
         var modifiers: [CombatModifier] = []
 
+        
         if movedHexes > 0 {
             baseDice = movingFireDice(
                 for: attacker,
@@ -414,7 +427,12 @@ struct NapoleonicsInfantryCombatEvaluator {
                 outcome: "\(finalDice) dice"
             )
         )
-
+        ///// ignoreFlags  moved to combatentryviewmodel
+        //let ignoreFlagsString = ignoreFlagMessage(for: defender)
+        //if !ignoreFlagsString.isEmpty {
+         //   unitReminders.append(ignoreFlagsString)
+        //}
+        ////
         return CombatResult(
             validation: CombatValidation(
                 isAllowed: true,
@@ -426,8 +444,11 @@ struct NapoleonicsInfantryCombatEvaluator {
             finalDice: finalDice,
             notes: ["Napoleonics infantry ranged evaluation."],
             appliedRules: appliedRules
+            //,
+            //unitReminders : unitReminders
         )
     }
+
 
     // MARK: - Cavalry (Phase 2)
 
@@ -441,7 +462,7 @@ struct NapoleonicsInfantryCombatEvaluator {
         attacker: UnitDefinition,
         defender: UnitDefinition
     ) -> CombatResult {
-
+        // var unitReminders : [String] = []
         let distance = context.targetDistance ?? 1
         guard distance <= 1 else {
             return blockedResult(
@@ -510,7 +531,12 @@ struct NapoleonicsInfantryCombatEvaluator {
                 outcome: "\(finalDice) dice"
             )
         )
-
+        ///// ignoreFlags moved to combatentryviewmodel
+        //let ignoreFlagsString = ignoreFlagMessage(for: defender)
+        //if !ignoreFlagsString.isEmpty {
+        //    unitReminders.append(ignoreFlagsString)
+        //}
+        ////
         return CombatResult(
             validation: CombatValidation(isAllowed: true, reasons: []),
             baseDice: baseDice,
@@ -519,6 +545,8 @@ struct NapoleonicsInfantryCombatEvaluator {
             finalDice: finalDice,
             notes: ["Napoleonics cavalry melee evaluation."],
             appliedRules: appliedRules
+            //,
+            //unitReminders: unitReminders
         )
     }
 
@@ -536,7 +564,7 @@ struct NapoleonicsInfantryCombatEvaluator {
         attacker: UnitDefinition,
         defender: UnitDefinition
     ) -> CombatResult {
-
+        //var unitReminders : [String] = []
         guard let tables = attacker.combatProfile.artilleryFireTables else {
             return blockedResult(
                 reason: "\(attacker.name) has no artillery fire data.",
@@ -579,19 +607,44 @@ struct NapoleonicsInfantryCombatEvaluator {
         }
 
         let isMelee = distance <= 1
-        let baseDice = slotDice
+        let artilleryBaseDice = slotDice
+        var baseDice = artilleryBaseDice
 
         let attackerTerrain = NapoleonicsTerrainLibrary.terrain(for: context.attackerTerrainID)
         let defenderTerrain = NapoleonicsTerrainLibrary.terrain(for: context.defenderTerrainID)
 
+        var notes: [String] = []
         var modifiers: [CombatModifier] = []
         var appliedRules: [AppliedRule] = [
             AppliedRule(
                 ruleID: isMelee ? "napoleonics.artillery.meleeBase" : "napoleonics.artillery.fireBase",
                 title: isMelee ? "Artillery melee base" : "Artillery fire base",
-                outcome: "Active table at \(distance) hex\(distance == 1 ? "" : "es") -> \(baseDice) dice"
+                outcome: "At distance of \(distance) hex\(distance == 1 ? "" : "es") -> \(artilleryBaseDice) dice"
             )
         ]
+
+        if context.isCombinedAttack,
+           let supportingUnitID = context.supportingUnitID,
+           let supportingUnit = NapoleonicsUnitLibrary.unit(for: supportingUnitID),
+           let supportingUnitBlocks = context.supportingUnitBlocks {
+
+            let combinedBonus = combinedArtilleryBonusDice(
+                supportingUnit: supportingUnit,
+                supportingUnitBlocks: supportingUnitBlocks,
+                supportingUnitTerrainID: context.supportingUnitTerrainID,
+                defenderTerrainID: context.defenderTerrainID,
+                supportingUnitInSquare: context.supportingUnitInSquare,
+                supportingUnitMovedIntoMelee: context.supportingUnitMovedIntoMelee,
+                supportingUnitCountryID: context.supportingUnitCountryID
+            )
+
+
+
+            baseDice += combinedBonus.dice
+            appliedRules.append(combinedBonus.appliedRule)
+            notes.append(contentsOf: combinedBonus.notes)
+        }
+
 
         // Apply hill-to-hill (and any future special) resolution first, matching
         // the infantry path: melee hill-to-hill = no modifier, ranged
@@ -633,20 +686,151 @@ struct NapoleonicsInfantryCombatEvaluator {
                 outcome: "\(finalDice) dice"
             )
         )
-
         return CombatResult(
             validation: CombatValidation(isAllowed: true, reasons: []),
             baseDice: baseDice,
             modifiers: modifiers,
             modifierTotal: modifierTotal,
             finalDice: finalDice,
-            notes: [
+            notes: notes + [
                 "Napoleonics artillery \(isMelee ? "melee" : "fire") evaluation.",
-                "artilleryBase:\(baseDice)@\(distance)"
+                "artilleryBase:\(artilleryBaseDice)@\(distance)"
             ],
+
             appliedRules: appliedRules
-        )
+            )
     }
+    
+    private struct CombinedArtilleryBonus {
+        let dice: Int
+        let sabersCount: Bool
+        let appliedRule: AppliedRule
+        let notes: [String]
+    }
+
+    private func combinedArtilleryBonusDice(
+        supportingUnit: UnitDefinition,
+        supportingUnitBlocks: Int,
+        supportingUnitTerrainID: String?,
+        defenderTerrainID: String?,
+        supportingUnitInSquare: Bool,
+        supportingUnitMovedIntoMelee: Bool,
+        supportingUnitCountryID: String?
+    ) -> CombinedArtilleryBonus {
+
+        let supportingTerrain = NapoleonicsTerrainLibrary.terrain(for: supportingUnitTerrainID)
+        let defenderTerrain = NapoleonicsTerrainLibrary.terrain(for: defenderTerrainID)
+
+        let baseBonusDice: Int
+        let outcome: String
+        var notes: [String] = []
+
+        switch supportingUnit.unitClass {
+        case .infantry:
+            if supportingUnitInSquare {
+                baseBonusDice = 1
+                outcome = "Supporting infantry is in square, so it contributes 1 die in the combined attack."
+            } else {
+                // Combined-attack support handles the Spanish moved-into-melee
+                // penalty separately below so the support breakdown can show the
+                // true base dice first, then the explicit -1 adjustment.
+                baseBonusDice = meleeBaseDice(
+                    for: supportingUnit,
+                    currentBlocks: supportingUnitBlocks,
+                    movedHexes: 0
+                )
+                outcome = meleeBaseExplanation(
+                    for: supportingUnit,
+                    currentBlocks: supportingUnitBlocks,
+                    movedHexes: 0,
+                    result: baseBonusDice
+                )
+
+
+            }
+
+            if !supportingUnit.hasSaber {
+                notes.append("Sabers do NOT count in this combined attack because the melee support unit does not have sabers.")
+            }
+      
+                
+
+        case .cavalry:
+            baseBonusDice = meleeBaseDice(
+                for: supportingUnit,
+                currentBlocks: supportingUnitBlocks,
+                movedHexes: 0
+            )
+            outcome = meleeBaseExplanation(
+                for: supportingUnit,
+                currentBlocks: supportingUnitBlocks,
+                movedHexes: 0,
+                result: baseBonusDice
+            )
+
+        case .artillery:
+            baseBonusDice = 0
+            outcome = "Only Infantry or Cavalry can contribute melee dice to an artillery combined attack."
+            notes.append("Supporting artillery does not add combined-attack melee dice.")
+        }
+        
+        let spanishMovedModifier: Int
+        if (supportingUnitCountryID ?? supportingUnit.countryID) == "spain",
+           supportingUnit.unitClass == .infantry,
+           supportingUnitMovedIntoMelee,
+           !supportingUnitInSquare {
+            spanishMovedModifier = -1
+        } else {
+            spanishMovedModifier = 0
+        }
+
+        let attackerOutModifier = supportingTerrain.map {
+            outPenalty(for: supportingUnit.unitClass, terrain: $0)
+        } ?? 0
+
+        let defenderIntoModifier = defenderTerrain.map {
+            intoPenalty(for: supportingUnit.unitClass, terrain: $0)
+        } ?? 0
+
+        let terrainModifier = attackerOutModifier + defenderIntoModifier
+        let bonusDice = max(0, baseBonusDice + terrainModifier + spanishMovedModifier)
+
+        let armName = supportingUnit.unitClass.rawValue.capitalized
+        let countryName = (supportingUnitCountryID ?? supportingUnit.countryID).capitalized
+        let dieWord = bonusDice == 1 ? "die" : "dice"
+
+        var supportBreakdown = "Supporting \(armName.lowercased()) base dice \(baseBonusDice)"
+
+        if attackerOutModifier != 0, let supportingTerrain {
+            supportBreakdown += "; attacking out of \(supportingTerrain.name) \(attackerOutModifier) dice" // Keep the short Results wording tied to the supporting unit's own terrain.
+        }
+
+        if defenderIntoModifier != 0, let defenderTerrain {
+            supportBreakdown += "; attacking into \(defenderTerrain.name) \(defenderIntoModifier) dice" // Show defender-terrain loss as part of the supporting unit's contribution.
+        }
+
+        if spanishMovedModifier != 0 {
+            supportBreakdown += "; Spanish moved into melee \(spanishMovedModifier) die" // Preserve the special Spanish moved-into-melee reduction in the same one-line breakdown.
+        }
+
+        supportBreakdown += "; net \(bonusDice) \(dieWord)"
+
+        notes.append("combinedArmsBonus:\(supportBreakdown)") // Prefix the note so the Results builder can surface it as a dedicated line without guessing.
+
+        return CombinedArtilleryBonus(
+            dice: bonusDice,
+            sabersCount: supportingUnit.hasSaber,
+            appliedRule: AppliedRule(
+                ruleID: "napoleonics.artillery.combinedArms",
+                title: "Combined Arms bonus",
+                outcome: "\(countryName) \(armName) support adds \(bonusDice) \(dieWord). \(outcome)"
+            ),
+            notes: notes
+        )
+
+    }
+
+    
 
     // MARK: - Artillery Helpers (Phase 2)
 
@@ -792,6 +976,23 @@ struct NapoleonicsInfantryCombatEvaluator {
         return nil
     }
 
+    private func meleeTerrainModifier(
+        attacker: UnitDefinition,
+        attackerTerrain: TerrainDefinition?,
+        defenderTerrain: TerrainDefinition?
+    ) -> Int {
+        if let attackerTerrain, let defenderTerrain,
+           attackerTerrain.id == "hill",
+           defenderTerrain.id == "hill" {
+            return 0
+        }
+
+        let out = attackerTerrain.map { outPenalty(for: attacker.unitClass, terrain: $0) } ?? 0
+        let into = defenderTerrain.map { intoPenalty(for: attacker.unitClass, terrain: $0) } ?? 0
+        return out + into
+    }
+
+    
     /// Resolve special-case ranged rules before applying standard terrain modifiers.
     /// Return nil when normal rules should be used.
     private func specialRangedResolution(
@@ -982,7 +1183,16 @@ struct NapoleonicsInfantryCombatEvaluator {
     }
 
     // MARK: - Result Helper
-
+    
+    /// For Ignoring Flags based on settings in the CVS
+    ///
+    
+    private func ignoreFlagMessage(for unit:UnitDefinition) -> String {
+        //could add stuff like, is supported and/or has leader for later
+        unit.ignoreFlags > 0 ? "This unit may always ignore \(unit.ignoreFlags) flag\(unit.ignoreFlags == 1 ? "" : "s")"  : "This unit cannot ignore any flags unless supported or has an attached leader"
+    }
+    
+    
     /// Shared helper for illegal or blocked attacks.
     private func blockedResult(reason: String, ruleID: String) -> CombatResult {
         CombatResult(
@@ -1002,6 +1212,8 @@ struct NapoleonicsInfantryCombatEvaluator {
                     outcome: reason
                 )
             ]
+            //,
+            //unitReminders: []
         )
     }
 }

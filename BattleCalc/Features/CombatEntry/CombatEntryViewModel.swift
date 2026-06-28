@@ -44,7 +44,47 @@ final class CombatEntryViewModel: ObservableObject {
     // targetDistance drives the engine's melee/ranged choice exactly as the
     // CSV sample loader does (distance 1 == melee). Default 1 = adjacent melee.
     @Published var targetDistance: Int = 1 { didSet { if targetDistance != oldValue { recompute() } } }
+    @Published var isCombinedAttack: Bool = false {
+        didSet {
+            // Combined attack is a rare optional branch. When the user turns it
+            // off, clear all supporting-unit selections so stale hidden values
+            // do not continue affecting the combat calculation.
+            if !isCombinedAttack {
+                supportingCountry = nil
+                supportingUnit = nil
+                supportingUnitBlocks = nil
+                supportingUnitTerrain = nil
+                supportingUnitInSquare = false
+                supportingUnitMovedIntoMelee = false
+            } else {
+                syncSupportingCountryForCombinedAttack()
+            }
 
+            recompute()
+        }
+    }
+
+
+    @Published var supportingUnit: CombatPickItem? {
+        didSet {
+            if supportingUnit?.id != oldValue?.id {
+                supportingUnitDidChange()
+            }
+        }
+    }
+    @Published var supportingUnitBlocks: Int? { didSet { recompute() } }
+    @Published var supportingUnitTerrain: CombatPickItem? { didSet { recompute() } }
+    @Published var supportingUnitInSquare: Bool = false { didSet { recompute() } }
+    @Published var supportingUnitMovedIntoMelee: Bool = false { didSet { recompute() } }
+    @Published var supportingCountry: CombatPickItem? {
+        didSet {
+            if supportingCountry?.id != oldValue?.id {
+                supportingCountryDidChange()
+            }
+        }
+    }
+
+    
     // MARK: Output.
     @Published private(set) var result: CombatResult?
 
@@ -60,16 +100,34 @@ final class CombatEntryViewModel: ObservableObject {
 
     // MARK: - Battle-back gating + actions.
 
-    /// The primary attack resolved as a melee (distance 1) and was allowed.
-    /// Battle-back is a melee-only follow-up, so the controls only appear when
-    /// the original result is an allowed melee.
-    var isPrimaryMelee: Bool {
-        targetDistance == 1 && (result?.validation.isAllowed ?? false)
+    /// Normal battle-back is offered after an allowed melee primary attack.
+    /// Combined-artillery is a special case: the initial artillery attack may be
+    /// ranged, but if it was a combined attack the defender may still battle back
+    /// in melee against the supporting unit.
+    private var isAllowedPrimaryResult: Bool {
+        result?.validation.isAllowed ?? false
     }
 
-    /// Show the "Did the defender Retreat?" controls only after a valid melee
-    /// primary result exists.
-    var showsBattleBackControls: Bool { isPrimaryMelee }
+    private var isCombinedArtilleryBattleBackCase: Bool {
+        isCombinedAttack
+            && attackerUnitClass == .artillery
+            && supportingUnit != nil
+            && supportingUnitTerrain != nil
+            && isAllowedPrimaryResult
+    }
+
+    var isPrimaryMelee: Bool {
+        targetDistance == 1 && isAllowedPrimaryResult
+    }
+
+    /// Show the "Did the defender Retreat?" controls after either:
+    /// - a normal allowed melee result, or
+    /// - an allowed combined-artillery result that can lead to melee battle-back
+    ///   against the supporting unit.
+    var showsBattleBackControls: Bool {
+        isPrimaryMelee || isCombinedArtilleryBattleBackCase
+    }
+
 
     /// The defender's remaining-blocks bound. The stepper runs 1...original
     /// defender blocks. We do not allow 0 here: an eliminated unit cannot battle
@@ -81,10 +139,11 @@ final class CombatEntryViewModel: ObservableObject {
     /// Battle Back is offerable only when the defender did NOT retreat and has
     /// at least one block remaining.
     var canBattleBack: Bool {
-        isPrimaryMelee
+        showsBattleBackControls
             && defenderRetreated == false
             && (defenderRemainingBlocks ?? 0) >= 1
     }
+
 
     /// Public setter for the retreat answer (the stored property is private(set)
     /// so the cascade reset stays internal). Setting it triggers the didSet.
@@ -126,33 +185,90 @@ final class CombatEntryViewModel: ObservableObject {
 
     /// Reversed context for the battle-back. Mirrors `buildContext()` but swaps
     /// the two sides, forces melee/distance 1/stationary, and uses the adjusted
-    /// remaining defender blocks as the (new) attacker's block count. Returns nil
-    /// if any field is still missing.
+    /// remaining defender blocks as the (new) attacker's block count.
+    ///
+    /// Normal melee battle-back:
+    /// - New attacker = original defender
+    /// - New defender = original attacker
+    ///
+    /// Combined-artillery battle-back:
+    /// - New attacker = original defender
+    /// - New defender = original supporting non-artillery unit only
+    ///
+    /// This preserves the normal retreat / remaining-blocks flow, but targets the
+    /// support unit instead of the artillery piece when the original attack was a
+    /// combined artillery attack.
     func buildBattleBackContext() -> CombatContext? {
         guard
-            let ac = attackerCountry, let au = attackerUnit,
-            let ab = attackerBlocks, let at = attackerTerrain,
-            let dc = defenderCountry, let du = defenderUnit,
+            let dc = defenderCountry,
+            let du = defenderUnit,
             let dt = defenderTerrain,
             let remaining = defenderRemainingBlocks
         else { return nil }
 
-        // New attacker = original defender; new defender = original attacker.
+        let battleBackDefenderCountry: CombatPickItem
+        let battleBackDefenderUnit: CombatPickItem
+        let battleBackDefenderBlocks: Int
+        let battleBackDefenderTerrain: CombatPickItem
+
+        if isCombinedAttack {
+            guard
+                let sc = supportingCountry,
+                let su = supportingUnit,
+                let sb = supportingUnitBlocks,
+                let st = supportingUnitTerrain
+            else { return nil }
+
+            battleBackDefenderCountry = sc
+            battleBackDefenderUnit = su
+            battleBackDefenderBlocks = sb
+            battleBackDefenderTerrain = st
+        } else {
+            guard
+                let ac = attackerCountry,
+                let au = attackerUnit,
+                let ab = attackerBlocks,
+                let at = attackerTerrain
+            else { return nil }
+
+            battleBackDefenderCountry = ac
+            battleBackDefenderUnit = au
+            battleBackDefenderBlocks = ab
+            battleBackDefenderTerrain = at
+        }
+
         return CombatContext(
             combatMode: .melee,
             movedHexes: 0,
             targetDistance: 1,
+
+            // New attacker = original defender, with post-combat remaining blocks.
             attackerCountryID: dc.id,
             attackerUnitID: du.id,
             attackerBlocks: remaining,
             attackerTerrainID: dt.id,
-            defenderCountryID: ac.id,
-            defenderUnitID: au.id,
-            defenderBlocks: ab,
-            defenderTerrainID: at.id,
-            attackDirection: .flat
+
+            // New defender = original attacker in normal battle-back, or the
+            // supporting unit only for combined-artillery battle-back.
+            defenderCountryID: battleBackDefenderCountry.id,
+            defenderUnitID: battleBackDefenderUnit.id,
+            defenderBlocks: battleBackDefenderBlocks,
+            defenderTerrainID: battleBackDefenderTerrain.id,
+
+            // Battle-back itself is a plain melee from the defender's hex. Do not
+            // carry combined-artillery support state into the reversed attack.
+            isCombinedAttack: false,
+            supportingUnitCountryID: nil,
+            supportingUnitID: nil,
+            supportingUnitBlocks: nil,
+            supportingUnitTerrainID: nil,
+            supportingUnitInSquare: false,
+            supportingUnitMovedIntoMelee: false,
+            attackDirection: .flat,
+            isBattleBack: true
         )
     }
+
 
     // MARK: - Option providers (each section reads these).
     var countryOptions: [CombatPickItem] { CombatEntryCatalog.countries() }
@@ -188,6 +304,22 @@ final class CombatEntryViewModel: ObservableObject {
         CombatEntryCatalog.countries().first { $0.id == Self.franceID }
     }
 
+    /// Combined attack support-country rule:
+    /// - France attacker => support country is forced to France.
+    /// - Non-France attacker => user must pick a non-France support country.
+    private func syncSupportingCountryForCombinedAttack() {
+        guard isCombinedAttack else { return }
+
+        if isFranceAttacker {
+            if supportingCountry?.id != Self.franceID {
+                supportingCountry = franceCountryItem
+            }
+        } else if supportingCountry?.id == Self.franceID {
+            supportingCountry = nil
+        }
+    }
+
+    
     var defenderClassOptions: [CombatPickItem] { defenderCountry.map { CombatEntryCatalog.classes(in: $0.id) } ?? [] }
     var defenderUnitOptions: [CombatPickItem] {
         guard let c = defenderCountry, let k = defenderClass else { return [] }
@@ -202,12 +334,32 @@ final class CombatEntryViewModel: ObservableObject {
     // The distance row must adapt to the attacker's class: cavalry is melee-only
     // (locked to 1), artillery's max comes from its *active* fire table (which
     // depends on moved + blocks), and infantry keeps the fixed 1...4.
+    
+    private var defenderUnitDefinition: UnitDefinition? {
+        defenderUnit.flatMap { NapoleonicsUnitLibrary.unit(for: $0.id) }
+    }
+    
     private var attackerUnitDefinition: UnitDefinition? {
         attackerUnit.flatMap { NapoleonicsUnitLibrary.unit(for: $0.id) }
     }
 
     /// Attacker's unit class, or nil before a unit is chosen.
     var attackerUnitClass: UnitClass? { attackerUnitDefinition?.unitClass }
+
+    /// Short helper text shown under the attacker Blocks row.
+    /// Prefer useful play reminders over setup data like max blocks.
+    var attackerBlocksHelperText: String? {
+        blocksHelperText(for: attackerUnitDefinition)
+    }
+
+    /// Short helper text shown under the defender Blocks row.
+    /// Even though the defender is not choosing range right now, this still gives
+    /// quick unit context like melee-only or unusual firing range.
+    var defenderBlocksHelperText: String? {
+        defenderUnit
+            .flatMap { NapoleonicsUnitLibrary.unit(for: $0.id) }
+            .flatMap { blocksHelperText(for: $0) }
+    }
 
     /// Cavalry is melee-only, so the UI locks the distance row to 1.
     var lockTargetDistanceToMelee: Bool { attackerUnitClass == .cavalry }
@@ -222,6 +374,63 @@ final class CombatEntryViewModel: ObservableObject {
     /// `maxMovement`, so e.g. an artillery piece with maxMovement 2 cannot be set
     /// to 3. Falls back to a permissive value before a unit is chosen.
     var maxMovedHexes: Int { attackerUnitDefinition?.combatProfile.maxMovement ?? 8 }
+
+    /// Build a short unit-info line for the Blocks row.
+    /// Artillery gets a richer active-table summary because plain "Range N"
+    /// hides the most useful play information: the dice by distance.
+    private func blocksHelperText(for unit: UnitDefinition?) -> String? {
+        guard let unit else { return nil }
+
+        var parts: [String] = []
+
+        if unit.combatProfile.isMeleeOnly || unit.unitClass == .cavalry {
+            parts.append("Close Combat only")
+        } else if unit.unitClass == .artillery {
+            if let artillerySummary = artilleryHelperText(for: unit) {
+                parts.append(artillerySummary) // Use the active artillery table so the player sees current dice by range, not just a max range.
+            } else {
+                parts.append("Range \(unit.combatProfile.range) or Melée") // Safe fallback if the artillery table is missing or not allowed.
+            }
+        } else if unit.combatProfile.range > 1 {
+            parts.append("Range \(unit.combatProfile.range) or Melée") // Infantry can still fight in close combat, so make that explicit.
+        }
+
+        if unit.combatProfile.canBattleAfterEnteringTerrainIDs.contains("forest") {
+            parts.append("May battle after entering forest") // Napoleonics uses Forest, not Woods, so match the actual terrain term and ID.
+        }
+
+        return parts.isEmpty ? nil : parts.joined(separator: " • ")
+    }
+
+    /// Short artillery helper based on the *current* active fire band.
+    /// Example: "Range 5 • 3|2|1|1|1". This reflects current blocks and whether
+    /// the unit moved, so the reminder matches the actual attack state.
+    private func artilleryHelperText(for unit: UnitDefinition) -> String? {
+        guard unit.unitClass == .artillery,
+              let tables = unit.combatProfile.artilleryFireTables else { return nil }
+
+        let moved = (attackerMovedHexes ?? 0) > 0
+        let singleBlock = (attackerBlocks ?? attackerMaxBlocks) <= 1
+
+        guard let band = artilleryActiveBand(
+            tables: tables,
+            moved: moved,
+            singleBlock: singleBlock
+        ) else {
+            return "No fire after moving" // Covers cases like foot artillery after moving.
+        }
+
+        let derivedRange = artilleryDerivedRange(band)
+        guard derivedRange > 0 else { return nil }
+
+        let diceByDistance = band.prefix(derivedRange).map { slot in
+            if let slot { return String(slot) }
+            return "-"
+        }.joined(separator: "|")
+
+        return "Range \(derivedRange) • \(diceByDistance)"
+    }
+
 
     /// Upper bound for the distance stepper. Cavalry -> 1; artillery -> its
     /// active table's derived range (falls back to 4 when the active band is
@@ -253,6 +462,59 @@ final class CombatEntryViewModel: ObservableObject {
         var range = 0
         for (i, slot) in band.enumerated() where slot != nil { range = i + 1 }
         return range
+    }
+    
+    /// Mirrors the evaluator's artillery-band selection so the entry UI can show
+    /// the same currently-active artillery table the engine will actually use.
+    private func artilleryActiveBand(
+        tables: ArtilleryFireTables,
+        moved: Bool,
+        singleBlock: Bool
+    ) -> ArtilleryFireBand? {
+        switch (moved, singleBlock) {
+        case (false, false): return tables.standingMultiBlock
+        case (false, true):  return tables.standingSingleBlock
+        case (true, false):  return tables.movingMultiBlock
+        case (true, true):   return tables.movingSingleBlock
+        }
+    }
+
+    /// Highest usable artillery distance in the active band.
+    /// Trailing nil slots are out of range and do not extend the range.
+    private func artilleryDerivedRange(_ band: ArtilleryFireBand) -> Int {
+        var range = 0
+        for (i, slot) in band.enumerated() where slot != nil {
+            range = i + 1
+        }
+        return range
+    }
+
+    
+    private func supportingUnitDidChange() {
+        if let unit = supportingUnit {
+            // Default the support unit's blocks immediately when the user picks it,
+            // matching the attacker/defender unit flow. This prevents the combined
+            // attack context from carrying nil blocks even though the UI can show
+            // a fallback display value.
+            supportingUnitBlocks = CombatEntryCatalog.maxBlocks(forUnit: unit.id)
+        } else {
+            supportingUnitBlocks = nil
+        }
+
+        // Square and moved-into-melee are support-unit-specific questions, so
+        // reset them when the selected supporting unit changes.
+        supportingUnitInSquare = false
+        supportingUnitMovedIntoMelee = false
+
+        recompute()
+    }
+    private func supportingCountryDidChange() {
+        supportingUnit = nil
+        supportingUnitBlocks = nil
+        supportingUnitTerrain = nil
+        supportingUnitInSquare = false
+        supportingUnitMovedIntoMelee = false
+        recompute()
     }
 
     // MARK: - Collapsed-summary detail lines.
@@ -287,9 +549,55 @@ final class CombatEntryViewModel: ObservableObject {
         return parts.joined(separator: " • ")
     }
 
+    /// Supporting-unit chips: blocks • terrain • moved-into-melee • square.
+    ///
+    /// This mirrors the attacker/defender collapsed-summary pattern so the
+    /// combined-attack branch can shrink back down after entry. Keep this
+    /// concise: the goal is to remind the user what they picked without pushing
+    /// the result section farther down the screen.
+    var supportingUnitSummaryDetail: String {
+        var parts: [String] = []
+
+        if let b = Self.blocksChip(supportingUnitBlocks) { parts.append(b) }
+        if let t = supportingUnitTerrain { parts.append(t.title) }
+
+        // Keep the support-summary logic self-contained in the view model.
+        // These facts already exist in the view layer too, but helpers defined
+        // in CombatEntryView are not visible here, so we derive them again from
+        // the chosen support unit ID.
+        let supportUnit = supportingUnit.flatMap { NapoleonicsUnitLibrary.unit(for: $0.id) }
+        let supportUnitClass = supportUnit?.unitClass
+        let showsMovedIntoMeleeChip = supportUnit?.countryID == "spain"
+            && supportUnitClass == .infantry
+
+        // Spanish infantry melee support can lose a die if it moved into melee.
+        // Only show this chip when that question is relevant for the chosen unit.
+        if showsMovedIntoMeleeChip {
+            parts.append(supportingUnitMovedIntoMelee ? "Moved into melee" : "Did not move into melee")
+        }
+
+        // Square only matters for infantry support. Keep the chip short and only
+        // show it when true; omitting it reads more cleanly than "Not in square."
+        if supportUnitClass == .infantry, supportingUnitInSquare {
+            parts.append("In square")
+        }
+
+        return parts.joined(separator: " • ")
+    }
+
+
+    
     /// True once a side has all of its fields, so it can collapse to a summary.
     var attackerComplete: Bool { attackerTerrain != nil }
     var defenderComplete: Bool { defenderTerrain != nil }
+    /// True once the support side has the fields needed for the current compact
+    /// summary / collapse behavior. For now we mirror the existing flow and
+    /// require a chosen support unit plus terrain.
+    ///
+    /// We can tighten this later if we decide infantry square or Spanish
+    /// moved-into-melee must be answered before collapse, but this is the
+    /// smallest working change and matches the current UI flow best.
+    var supportingUnitComplete: Bool { supportingUnit != nil && supportingUnitTerrain != nil }
 
     /// Battle-wide extras summary (range + resolved mode). Not country-specific,
     /// so it collapses into its own compact row rather than a side box.
@@ -298,17 +606,48 @@ final class CombatEntryViewModel: ObservableObject {
         return "\(targetDistance) hex\(targetDistance == 1 ? "" : "es") • \(mode)"
     }
 
+    /// Defender-only callout shown in the larger gray summary row.
+    /// Keep this empty outside melee. In Napoleonics, this first-pass reminder
+    /// covers the two simple cavalry / infantry defender reactions we want to
+    /// surface during play:
+    /// - cavalry attacker vs infantry defender -> MAY FORM SQUARE
+    /// - infantry attacker vs cavalry defender -> MAY RETIRE AND REFORM
+    var defenderContextCallout: String? {
+        guard defenderComplete else { return nil }
+        guard targetDistance == 1 else { return nil }
+        guard let attacker = attackerUnit.flatMap({ NapoleonicsUnitLibrary.unit(for: $0.id) }),
+              let defender = defenderUnit.flatMap({ NapoleonicsUnitLibrary.unit(for: $0.id) }) else {
+            return nil
+        }
+
+        // Cavalry attacks are always melee, so infantry defenders can be reminded
+        // here to consider Square against the current cavalry attacker.
+        if attacker.unitClass == .cavalry && defender.unitClass == .infantry {
+            return "MAY FORM SQUARE"
+        }
+
+        // Infantry melee attacks against cavalry should prompt the attacking
+        // player to ask whether the defending cavalry wants to Retire and Reform.
+        if attacker.unitClass == .infantry && defender.unitClass == .cavalry {
+            return "MAY RETIRE AND REFORM"
+        }
+
+        return nil
+    }
+
+
+
     /// Prominent, always-visible distance/mode phrase shown between the attacker
-    /// and defender. Distance 1 reads as melee ("Defender in Melee at 1 hex");
-    /// distance > 1 reads as ranged ("Defender at Range Attack 2 hexes away"),
-    /// driven purely by the current `targetDistance` (no engine dependency, so it
-    /// shows reliably whenever the distance is known).
+    /// and defender. Keep it short so the banner reads more like the smoother
+    /// Ancients worksheet summary and less like a full sentence.
     var distanceToTargetHeadline: String {
         if targetDistance == 1 {
-            return "Defender in Melee at 1 hex"
+            return "Close Combat"
         }
-        return "Defender at Range Attack \(targetDistance) hexes away"
+        return "Ranged Attack • \(targetDistance) hex\(targetDistance == 1 ? "" : "es")"
     }
+
+
 
     // MARK: - Cascade clearing (top-down within ONE side only).
     // Each helper clears everything below it on the same side. Cross-side
@@ -404,7 +743,9 @@ final class CombatEntryViewModel: ObservableObject {
             // Attacker cleared entirely: drop the defender too.
             clearDefenderCountry()
         }
+        syncSupportingCountryForCombinedAttack()
         recompute()
+
     }
 
     /// Resets the defender country to satisfy the France rule from scratch:
@@ -465,6 +806,9 @@ final class CombatEntryViewModel: ObservableObject {
         let lines: [DiceModifierLine] // ordered signed modifier lines
         let total: Int                // sum of all line values
         let final: Int
+        
+        /// unitReminder is a way to show the use information about that unit.
+        var unitReminder: String? = nil
 
         /// Artillery base is table-derived, not a block count. When set, the UI
         /// shows "Base Dice: 3 at 2 hexes" instead of "Base Dice: N blocks".
@@ -475,6 +819,15 @@ final class CombatEntryViewModel: ObservableObject {
         /// modifier). Used for the plateau (hill-to-hill melee) rule, which
         /// applies no terrain dice modifier but should still be explained.
         var note: String? = nil
+
+        /// Optional short explanation for artillery combined support, shown as a
+        /// dedicated Results row labeled "Combined Arms bonus".
+        var combinedArmsBonusNote: String? = nil
+        
+        /// Optional signed value for the Combined Arms bonus so the Results UI
+        /// can show "+N" aligned with other modifier rows.
+        var combinedArmsBonusValue: Int? = nil
+
 
         /// True when nothing modifies the base, so the UI can collapse to a
         /// single "Melee: Final Dice: N" line. Artillery always shows the
@@ -500,17 +853,26 @@ final class CombatEntryViewModel: ObservableObject {
                 reasons: r.validation.reasons,
                 mode: targetDistance == 1 ? "Melee" : "Ranged",
                 baseBlocks: attackerBlocks ?? 0,
-                lines: [], total: 0, final: r.finalDice ?? 0
+                lines: [], total: 0, final: r.finalDice ?? 0,
+                ///Added to alert users about ignored flags by defender
+                unitReminder: ignoreFlagsReminder(for: defenderUnitDefinition)
             )
         }
 
         let isMelee = targetDistance == 1
         var lines: [DiceModifierLine] = []
-
+        
+      
         // Artillery base is table-derived (e.g. "3 at 2 hexes"), so the
         // base-vs-blocks gap line below does not apply — the raw block count is
         // not the base for artillery. For infantry/cavalry this is nil.
         let artilleryBase = artilleryBaseDescription(from: r.notes)
+
+        // Combined artillery support already has correct engine math; this simply
+        // surfaces its short explanation and net dice in the Results section as a
+        // dedicated Combined Arms row.
+        let combinedArms = combinedArmsBonus(from: r.notes)
+
 
         // Re-expose the base-vs-raw-blocks gap as an explicit line. For melee with
         // the moved penalty this is exactly -1 ("moved to melee"); for ranged the
@@ -548,9 +910,15 @@ final class CombatEntryViewModel: ObservableObject {
             lines: lines,
             total: total,
             final: final,
+            ///Added to alert users about ignored flags by defender
+            unitReminder: ignoreFlagsReminder(for: defenderUnitDefinition),
             artilleryBaseDescription: artilleryBase,
-            note: ruleNote(from: r)
+            note: ruleNote(from: r),
+            combinedArmsBonusNote: combinedArms?.description,
+            combinedArmsBonusValue: combinedArms?.value
+
         )
+
     }
 
     /// Display breakdown for the battle-back (reversed) result, or nil when no
@@ -591,6 +959,7 @@ final class CombatEntryViewModel: ObservableObject {
         return ResultBreakdown(
             isAllowed: true, reasons: [], mode: "Melee",
             baseBlocks: blocks, lines: lines, total: total, final: final,
+            unitReminder: ignoreFlagsReminder(for: attackerUnitDefinition),
             artilleryBaseDescription: artilleryBase,
             note: ruleNote(from: r)
         )
@@ -607,6 +976,39 @@ final class CombatEntryViewModel: ObservableObject {
         guard parts.count == 2, let dice = Int(parts[0]), let dist = Int(parts[1]) else { return nil }
         return "\(dice) at \(dist) hex\(dist == 1 ? "" : "es")"
     }
+    
+    /// Pull the short combined-support explanation and its net dice value out of
+    /// the evaluator notes so the Results section can show a dedicated
+    /// "Combined Arms bonus" row with "+N" aligned on the right.
+    private func combinedArmsBonus(from notes: [String]) -> (description: String, value: Int)? {
+        let prefix = "combinedArmsBonus:"
+        guard let raw = notes.first(where: { $0.hasPrefix(prefix) }) else { return nil }
+        let description = String(raw.dropFirst(prefix.count))
+
+        // Try to extract the "net N die/dice" suffix. If parsing fails, skip the
+        // numeric value so we do not risk mismatched arithmetic.
+        var value: Int? = nil
+        if let range = description.range(of: "net ") {
+            let tail = description[range.upperBound...]
+            // tail is like "4 dice" or "1 die"; split on space and parse first token.
+            let parts = tail.split(separator: " ")
+            if let first = parts.first, let parsed = Int(first) {
+                value = parsed
+            }
+        }
+
+        guard let v = value else { return nil }
+        return (description: description, value: v)
+    }
+
+
+    
+    /// Text only note as a tool for users to see info about the ability to ignore flags
+    private func ignoreFlagsReminder(for unit: UnitDefinition?) -> String? {
+        guard let flags = unit?.ignoreFlags, flags > 0 else { return "This defender cannot ignore any flags on their own without support or attached leader." }
+        return "Defender may ignore \(flags) flag\(flags == 1 ? "" : "s")."
+    }
+
 
     /// Text-only note for a result, derived from the engine's own applied rules
     /// so it appears exactly when the rule fired (all classes, primary and
@@ -698,8 +1100,17 @@ final class CombatEntryViewModel: ObservableObject {
             defenderUnitID: du.id,
             defenderBlocks: db,
             defenderTerrainID: dt.id,
+            isCombinedAttack: isCombinedAttack,
+            supportingUnitCountryID: supportingCountry?.id,
+            supportingUnitID: supportingUnit?.id,
+            supportingUnitBlocks: supportingUnitBlocks,
+            supportingUnitTerrainID: supportingUnitTerrain?.id,
+            supportingUnitInSquare: supportingUnitInSquare,
+            supportingUnitMovedIntoMelee: supportingUnitMovedIntoMelee,
             attackDirection: .flat
+
         )
+
     }
 
     /// Ordered, human-readable trace for the most recent battle (the engine's

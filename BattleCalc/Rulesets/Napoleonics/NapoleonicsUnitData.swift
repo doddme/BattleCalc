@@ -27,6 +27,7 @@ private struct UnitCSVRow {
     let meleeBonusVsInfantry: String
     let canBattleAfterEnteringTerrainIDs: String
     let hasSaber: String
+    let ignoreFlags: String
 
     // New optional cavalry/artillery support fields. Absent column or blank
     // value is allowed; defaults preserve current infantry behavior.
@@ -47,7 +48,7 @@ private enum UnitCSVColumn {
         "id", "countryID", "name", "unitClass", "maxBlocks",
         "maxMovement", "maxMovementToShoot", "range",
         "standingFireRule", "movingFireRule", "meleeDiceRule",
-        "meleeBonusVsInfantry", "canBattleAfterEnteringTerrainIDs", "hasSaber"
+        "meleeBonusVsInfantry", "canBattleAfterEnteringTerrainIDs", "hasSaber", "ignoreFlags"
     ]
 
     // Optional new fields — safe to omit; blank/absent => default.
@@ -160,11 +161,13 @@ enum NapoleonicsUnitCSVLoader {
                 meleeBonusVsInfantry: value("meleeBonusVsInfantry"),
                 canBattleAfterEnteringTerrainIDs: value("canBattleAfterEnteringTerrainIDs"),
                 hasSaber: value("hasSaber"),
+                ignoreFlags: value("ignoreFlags"),
                 isMeleeOnly: value(UnitCSVColumn.isMeleeOnly),
                 artilleryStandingMultiBlock: value(UnitCSVColumn.artilleryStandingMultiBlock),
                 artilleryStandingSingleBlock: value(UnitCSVColumn.artilleryStandingSingleBlock),
                 artilleryMovingMultiBlock: value(UnitCSVColumn.artilleryMovingMultiBlock),
-                artilleryMovingSingleBlock: value(UnitCSVColumn.artilleryMovingSingleBlock)
+                artilleryMovingSingleBlock: value(UnitCSVColumn.artilleryMovingSingleBlock),
+                
             )
 
             // Skip fully blank lines (e.g. an id-less trailing row).
@@ -193,6 +196,7 @@ enum NapoleonicsUnitCSVLoader {
             unitClass: try parseUnitClass(row.unitClass, unitID: row.id),
             maxBlocks: try parseInt(row.maxBlocks, field: "maxBlocks", unitID: row.id),
             hasSaber: try parseBool(row.hasSaber, field: "hasSaber", unitID: row.id),
+           
             combatProfile: UnitCombatProfile(
                 maxMovement: try parseInt(row.maxMovement, field: "maxMovement", unitID: row.id),
                 maxMovementToShoot: try parseInt(row.maxMovementToShoot, field: "maxMovementToShoot", unitID: row.id),
@@ -203,6 +207,7 @@ enum NapoleonicsUnitCSVLoader {
                     row.movingFireRule, unitID: row.id, default: .none),
                 meleeRule: try parseMeleeRule(
                     row.meleeRule, unitID: row.id, default: .currentBlocks),
+               
                 isMeleeOnly: try parseOptionalBool(
                     row.isMeleeOnly,
                     field: "isMeleeOnly",
@@ -219,7 +224,8 @@ enum NapoleonicsUnitCSVLoader {
                     )
                 ),
                 canBattleAfterEnteringTerrainIDs: parseTerrainIDs(row.canBattleAfterEnteringTerrainIDs)
-            )
+            ),
+            ignoreFlags: try parseInt(row.ignoreFlags, field: "ignoreFlags", unitID: row.id),  // Reading the new ignoreFlags field in csv
         )
     }
 

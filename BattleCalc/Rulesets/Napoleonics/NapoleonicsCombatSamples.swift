@@ -25,6 +25,19 @@ private struct CombatSampleCSVRow {
     let defenderUnitID: String
     let defenderBlocks: String
     let defenderTerrainID: String
+    // Combined-attack support fields. These are blank for normal/non-combined
+    // tests so the older smoke-test rows keep working, but they let us pin the
+    // rare Napoleonics artillery support cases in regression samples.
+    let isCombinedAttack: String
+    let supportingUnitCountryID: String
+    let supportingUnitID: String
+    let supportingUnitBlocks: String
+    let supportingUnitTerrainID: String
+    let supportingUnitInSquare: String
+    let supportingUnitMovedIntoMelee: String
+
+    // Expected result fields stay last so the CSV still reads as
+    // "inputs first, assertions last".
     let expectedAllowed: String
     let expectedFinalDice: String
 }
@@ -89,7 +102,11 @@ enum NapoleonicsCombatSampleLoader {
                 .split(separator: ",", omittingEmptySubsequences: false)
                 .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
 
-            guard columns.count >= 12 else {
+            // The CSV now includes combined-attack support columns between the
+            // defender terrain and the expected-result fields. Non-combined rows
+            // can leave those support columns blank, but the loader still expects
+            // the full column count so the mapping stays stable.
+            guard columns.count >= 19 else {
                 throw CombatSampleLoadError.invalidRow(line)
             }
 
@@ -104,8 +121,15 @@ enum NapoleonicsCombatSampleLoader {
                 defenderUnitID: columns[7],
                 defenderBlocks: columns[8],
                 defenderTerrainID: columns[9],
-                expectedAllowed: columns[10],
-                expectedFinalDice: columns[11]
+                isCombinedAttack: columns[10],
+                supportingUnitCountryID: columns[11],
+                supportingUnitID: columns[12],
+                supportingUnitBlocks: columns[13],
+                supportingUnitTerrainID: columns[14],
+                supportingUnitInSquare: columns[15],
+                supportingUnitMovedIntoMelee: columns[16],
+                expectedAllowed: columns[17],
+                expectedFinalDice: columns[18]
             )
 
             samples.append(try makeSample(from: row))
@@ -119,6 +143,17 @@ enum NapoleonicsCombatSampleLoader {
         let targetDistance = try parseOptionalInt(row.targetDistance, field: "targetDistance", sampleID: row.id)
         let attackerTerrainID = normalizeOptionalString(row.attackerTerrainID)
         let defenderTerrainID = normalizeOptionalString(row.defenderTerrainID)
+
+        // Combined-attack support inputs are optional for normal smoke-test rows.
+        // Blank values stay nil/false so the old samples still behave exactly as
+        // they did before these support columns were added.
+        let isCombinedAttack = try parseOptionalBool(row.isCombinedAttack, field: "isCombinedAttack", sampleID: row.id) ?? false
+        let supportingUnitCountryID = normalizeOptionalString(row.supportingUnitCountryID)
+        let supportingUnitID = normalizeOptionalString(row.supportingUnitID)
+        let supportingUnitBlocks = try parseOptionalInt(row.supportingUnitBlocks, field: "supportingUnitBlocks", sampleID: row.id)
+        let supportingUnitTerrainID = normalizeOptionalString(row.supportingUnitTerrainID)
+        let supportingUnitInSquare = try parseOptionalBool(row.supportingUnitInSquare, field: "supportingUnitInSquare", sampleID: row.id) ?? false
+        let supportingUnitMovedIntoMelee = try parseOptionalBool(row.supportingUnitMovedIntoMelee, field: "supportingUnitMovedIntoMelee", sampleID: row.id) ?? false
 
         let combatMode: CombatMode = (targetDistance == 1) ? .melee : .ranged
 
@@ -150,8 +185,24 @@ enum NapoleonicsCombatSampleLoader {
             defenderUnitID: row.defenderUnitID,
             defenderBlocks: try parseInt(row.defenderBlocks, field: "defenderBlocks", sampleID: row.id),
             defenderTerrainID: defenderTerrainID,
+
+            // Combined-attack support fields. These are ignored by the evaluator
+            // unless isCombinedAttack is true, so it is safe for ordinary samples
+            // to leave them blank in the CSV.
+            isCombinedAttack: isCombinedAttack,
+            supportingUnitCountryID: supportingUnitCountryID,
+            supportingUnitID: supportingUnitID,
+            supportingUnitBlocks: supportingUnitBlocks,
+            supportingUnitTerrainID: supportingUnitTerrainID,
+            supportingUnitInSquare: supportingUnitInSquare,
+            supportingUnitMovedIntoMelee: supportingUnitMovedIntoMelee,
+
+            // Existing battle-wide/default fields follow the stored-property
+            // order in CombatContext so the synthesized memberwise initializer
+            // continues to compile cleanly.
             attackDirection: .flat
         )
+
 
         return NapoleonicsCombatSample(
             id: row.id,
@@ -178,6 +229,19 @@ enum NapoleonicsCombatSampleLoader {
             throw CombatSampleLoadError.invalidValue(field: field, value: value, sampleID: sampleID)
         }
     }
+    
+    private static func parseOptionalBool(_ value: String, field: String, sampleID: String) throws -> Bool? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+
+        switch trimmed.uppercased() {
+        case "TRUE": return true
+        case "FALSE": return false
+        default:
+            throw CombatSampleLoadError.invalidValue(field: field, value: value, sampleID: sampleID)
+        }
+    }
+
 
     private static func parseInt(_ value: String, field: String, sampleID: String) throws -> Int {
         guard let intValue = Int(value) else {

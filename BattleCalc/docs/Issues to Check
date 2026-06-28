@@ -1,0 +1,7 @@
+MAYBE: When Battling Back and we reduce the number of blocks, the next timee we check this they keep their blocks at the level they were.
+I think it might be best to RESET all to choose the next set.  I think the data gets confused.
+
+YES: A button at the top to reset and start over from scratch rather than editing the prior setup
+
+YES: Have a ignoreFLags logic added to Ancients side.  This can be very confusing and there are lots of things I could add   ELEPHANT Rules that are special.  Leader rules, EVADE rules.  Who can EVADE - this will be the defender but if I prerun this I might decide it's not worth.
+

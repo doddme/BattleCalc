@@ -41,12 +41,53 @@ struct CombatEntryDebugView: View {
                 LabeledContent("Moved hexes", value: c.movedHexes.map(String.init) ?? "—")
                 LabeledContent("Attacker", value: "\(c.attackerUnitID) · \(c.attackerBlocks) blk · \(c.attackerTerrainID ?? "Clear")")
                 LabeledContent("Defender", value: "\(c.defenderUnitID) · \(c.defenderBlocks) blk · \(c.defenderTerrainID ?? "Clear")")
+
+                // Show Napoleonics combined-attack support fields explicitly so we
+                // can verify whether the support-unit selections actually made it
+                // into the runtime CombatContext. This is especially useful when
+                // the trace shows only artillery base + final result, which means
+                // the combined-attack branch may have been skipped entirely.
+                
+                if showsNapoleonicsCombinedAttackDebug {
+                    // Show Napoleonics combined-attack support fields explicitly so we
+                    // can verify whether the support-unit selections actually made it
+                    // into the runtime CombatContext. This is especially useful when
+                    // the trace shows only artillery base + final result, which means
+                    // the combined-attack branch may have been skipped entirely.
+                    LabeledContent("Combined attack", value: c.isCombinedAttack ? "Yes" : "No")
+                    LabeledContent("Supporting unit", value: c.supportingUnitID ?? "—")
+                    LabeledContent("Supporting blocks", value: c.supportingUnitBlocks.map(String.init) ?? "—")
+                    LabeledContent("Supporting terrain", value: c.supportingUnitTerrainID ?? "—")
+                    LabeledContent("Supporting Country", value: c.supportingUnitCountryID ?? "—")
+                    LabeledContent("Supporting in square", value: c.supportingUnitInSquare ? "Yes" : "No")
+                    LabeledContent("Support moved into melee", value: c.supportingUnitMovedIntoMelee ? "Yes" : "No")
+                }
+
             } else {
+
                 Text("No complete battle entered yet.").foregroundStyle(.secondary)
             }
         }
     }
 
+    
+    // The extra combined-attack debug rows are Napoleonics-specific for now.
+    // Keep the base debug info visible for every game, but only show the
+    // support-unit fields when the current context looks like a Napoleonics battle.
+    private var showsNapoleonicsCombinedAttackDebug: Bool {
+        guard let c = context else { return false }
+
+        return c.isCombinedAttack
+            || c.supportingUnitID != nil
+            || c.supportingUnitBlocks != nil
+            || c.supportingUnitTerrainID != nil
+            || c.supportingUnitCountryID != nil
+            || c.supportingUnitInSquare
+            || c.supportingUnitMovedIntoMelee
+    }
+
+    
+    
     @ViewBuilder private var traceSection: some View {
         Section("Most-recent battle trace") {
             if trace.isEmpty {
