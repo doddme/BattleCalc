@@ -31,8 +31,8 @@ prussian-guard-grenadier,prussia,Prussian Guard Grenadier,infantry,4,1,1,2,curre
 prussian-reserve-infantry,prussia,Prussian Reserve Infantry,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocks,FALSE,,TRUE,,,,,,0
 prussian-militia,prussia,Prussian Militia,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocks,FALSE,,FALSE,,,,,,0
 austrian-line-infantry,austria,Austrian Line Infantry,infantry,5,1,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocks,FALSE,,TRUE,,,,,,0
-austrian-light-infantry,austria,Austrian Light Infantry,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocks,FALSE,,TRUE,,,,,,0
-austrian-grenzer-infantry,austria,Austrian Grenzer Infantry,infantry,4,1,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocks,FALSE,,FALSE,,,,,,0
+austrian-light-infantry,austria,Austrian Light Infantry,infantry,4,2,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocks,FALSE,forest|walled-garden|church|walled-farm,TRUE,,,,,,0
+austrian-grenzer-infantry,austria,Austrian Grenzer Infantry,infantry,4,1,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocks,FALSE,forest|walled-garden|church|walled-farm,FALSE,,,,,,0
 austrian-grenadier,austria,Austrian Grenadier,infantry,4,1,1,2,currentBlocksPlusOne,halfCurrentBlocksRoundedDownPlusOne,currentBlocksPlusOne,FALSE,,TRUE,,,,,,1
 austrian-militia,austria,Austrian Militia,infantry,4,1,1,2,currentBlocks,halfCurrentBlocksRoundedDown,currentBlocks,FALSE,,FALSE,,,,,,0
 french-foot-artillery,france,French Foot Artillery,artillery,3,1,0,5,currentBlocks,currentBlocks,currentBlocks,FALSE,,TRUE,,4|3|2|1|1,3|2|1|1,,,0

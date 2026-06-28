@@ -19,15 +19,18 @@ struct CombatEntryView: View {
     }
 
     @StateObject private var vm = CombatEntryViewModel()
-    // Once a unit type is chosen, that side collapses to a single colored
-    // unit-type summary row. Tapping the summary flips the matching flag back on
-    // to re-expand Country / Unit class / Unit type for editing.
-    @State private var editingAttacker = false
+    // Worksheet-style section control:
+    // start with Attacker open, let one major side be edited at a time, and keep
+    // track of whether Attacker was completed once so later edits can preserve a
+    // smoother Ancients-style flow.
+    @State private var editingAttacker = true
     @State private var editingDefender = false
     @State private var editingSupportingUnit = false
+    @State private var attackerHasBeenCompleted = false
 
     // Battle-wide extras (range/mode) collapse into a compact summary too.
     @State private var editingExtras = false
+
     @State private var showChangeGameConfirmation = false
     #if DEBUG
     @State private var showDebug = false
@@ -108,26 +111,45 @@ struct CombatEntryView: View {
     // from the view model and is driven by the current target distance.
     @ViewBuilder private var distanceBanner: some View {
         Section {
-            HStack(spacing: 8) {
-                Image(systemName: vm.targetDistance == 1 ? "shield.lefthalf.filled" : "scope")
-                    .foregroundStyle(.tint)
-                Text(vm.distanceToTargetHeadline)
-                    .font(.headline)
-                Spacer()
+            Button {
+                editingAttacker = true // Reopen attacker because distance is edited from the attacker workflow.
+                editingDefender = false // Keep only one major section expanded at a time.
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: vm.targetDistance == 1 ? "shield.lefthalf.filled" : "scope")
+                        .foregroundStyle(.tint)
+                    Text(vm.distanceToTargetHeadline)
+                        .font(.headline)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
     }
+
 
     // MARK: - Attacker
     @ViewBuilder private var attackerSection: some View {
         Section("Attacker") {
             if let unit = vm.attackerUnit, vm.attackerComplete, !editingAttacker {
                 // Fully collapsed: one colored box with unit type + blocks /
-                // moved / terrain chips. Separate rows below are hidden.
-                SideSummaryRow(unit: unit, countryID: vm.attackerCountry?.id,
-                               detail: vm.attackerSummaryDetail) {
+                // moved / terrain chips. Tapping it reopens Attacker and closes
+                // Defender so the worksheet behaves like Ancients.
+                SideSummaryRow(
+                    unit: unit,
+                    countryID: vm.attackerCountry?.id,
+                    detail: vm.attackerSummaryDetail,
+                    trailingCallout: nil // No contextual right-side reminder on the attacker summary.
+                ) {
                     editingAttacker = true
+                    editingDefender = false
                 }
+
+
             } else {
                 CombatDisclosureRow(label: "Country", selection: vm.attackerCountry,
                                     options: vm.countryOptions) { vm.attackerCountry = $0 }
@@ -141,9 +163,16 @@ struct CombatEntryView: View {
                                         options: vm.attackerUnitOptions) { vm.attackerUnit = $0 }
                 }
                 if vm.attackerUnit != nil {
-                    CombatBlocksRow(label: "Blocks", value: vm.attackerBlocks ?? vm.attackerMaxBlocks,
-                                    maxBlocks: vm.attackerMaxBlocks) { vm.attackerBlocks = $0 }
+                    CombatBlocksRow(
+                        label: "Blocks",
+                        value: vm.attackerBlocks ?? vm.attackerMaxBlocks,
+                        maxBlocks: vm.attackerMaxBlocks,
+                        helperText: vm.attackerBlocksHelperText
+                    ) {
+                        vm.attackerBlocks = $0
+                    }
                 }
+
                 // Every class asks "Moved This Turn?" (moving into woods/town can
                 // forbid battle). Cavalry needs only yes/no — the distance is
                 // irrelevant — so its stepper is suppressed (`distanceAdjustable:
@@ -164,13 +193,22 @@ struct CombatEntryView: View {
                 }
                 if vm.attackerMovedHexes != nil {
                     // Terrain the attacker fires FROM. Separate from the defender's.
-                    // Selecting it completes the side, which auto-collapses it.
+                    // Unlike the older Napoleonics flow, choosing it does NOT
+                    // immediately collapse the side; the explicit Done button below
+                    // matches the smoother Ancients worksheet behavior.
                     CombatDisclosureRow(label: "Terrain (fires from)", selection: vm.attackerTerrain,
                                         options: vm.terrainOptions) {
                         vm.attackerTerrain = $0
-                        editingAttacker = false
+                    }
+
+                    if vm.attackerComplete {
+                        Button("Done") {
+                            attackerHasBeenCompleted = true // Remember that Attacker was completed once so later edits can keep Defender visible.
+                            editingAttacker = false
+                        }
                     }
                 }
+
             }
         }
     }
@@ -180,11 +218,20 @@ struct CombatEntryView: View {
         Section("Defender") {
             if let unit = vm.defenderUnit, vm.defenderComplete, !editingDefender {
                 // Fully collapsed: one colored box with unit type + blocks /
-                // terrain chips (defender has no movement).
-                SideSummaryRow(unit: unit, countryID: vm.defenderCountry?.id,
-                               detail: vm.defenderSummaryDetail) {
+                // terrain chips (defender has no movement). Tapping it reopens
+                // Defender and closes Attacker so only one main section stays open.
+                SideSummaryRow(
+                    unit: unit,
+                    countryID: vm.defenderCountry?.id,
+                    detail: vm.defenderSummaryDetail,
+                    trailingCallout: vm.defenderContextCallout // Defender-only current-combat reminder, e.g. cavalry attacking infantry.
+                ) {
+                    editingAttacker = false
                     editingDefender = true
                 }
+
+
+
             } else {
                 // French rule: a non-France attacker forces the defender to
                 // France, so the Country row is redundant and hidden. It only
@@ -206,17 +253,29 @@ struct CombatEntryView: View {
                                         options: vm.defenderUnitOptions) { vm.defenderUnit = $0 }
                 }
                 if vm.defenderUnit != nil {
-                    CombatBlocksRow(label: "Blocks", value: vm.defenderBlocks ?? vm.defenderMaxBlocks,
-                                    maxBlocks: vm.defenderMaxBlocks) { vm.defenderBlocks = $0 }
+                    CombatBlocksRow(
+                        label: "Blocks",
+                        value: vm.defenderBlocks ?? vm.defenderMaxBlocks,
+                        maxBlocks: vm.defenderMaxBlocks,
+                        helperText: vm.defenderBlocksHelperText
+                    ) {
+                        vm.defenderBlocks = $0
+                    }
                 }
+
                 if vm.defenderBlocks != nil {
                     // Terrain the defender OCCUPIES — chosen independently because
-                    // the two units are at least one hex apart. Completing it
-                    // auto-collapses this side.
+                    // the two units are at least one hex apart. Like Ancients, keep
+                    // the side open until the user explicitly taps Done.
                     CombatDisclosureRow(label: "Terrain (occupies)", selection: vm.defenderTerrain,
                                         options: vm.terrainOptions) {
                         vm.defenderTerrain = $0
-                        editingDefender = false
+                    }
+
+                    if vm.defenderComplete {
+                        Button("Done") {
+                            editingDefender = false
+                        }
                     }
                 }
             }
@@ -246,10 +305,12 @@ struct CombatEntryView: View {
                     SideSummaryRow(
                         unit: unit,
                         countryID: vm.supportingCountry?.id,
-                        detail: vm.supportingUnitSummaryDetail
+                        detail: vm.supportingUnitSummaryDetail,
+                        trailingCallout: nil // Support summary has no contextual right-side reminder.
                     ) {
                         editingSupportingUnit = true
                     }
+
                 } else {
                     // The supporting unit must be an infantry or cavalry unit from
                     // the attacker's side. We do not ask separately whether it is
@@ -391,26 +452,55 @@ struct CombatEntryView: View {
     // ranged) is identical — only the placement changed. Delete this helper and
     // re-enable `extrasSection` in `body` to move distance back to the end.
     @ViewBuilder private var targetDistanceRow: some View {
-        // Class-aware. Cavalry is melee-only, so the stepper locks to 1. Artillery
-        // and infantry use a 1...maxTargetDistance stepper, where the artillery max
-        // is derived from the active fire table (updates after moved/blocks change).
-        if vm.lockTargetDistanceToMelee {
-            LabeledContent("Range to target (hexes)", value: "1")
-            Text("Cavalry is melee-only — locked to adjacent (1 hex).")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        } else {
-            let upper = max(1, vm.maxTargetDistance)
-            Stepper(value: Binding(get: { vm.targetDistance },
-                                   set: { vm.targetDistance = $0 }), in: 1...upper) {
-                LabeledContent("Range to target (hexes)", value: "\(vm.targetDistance) / \(upper)")
+        // Match the smoother Ancients worksheet treatment: keep Distance to Target
+        // visually grouped in its own tinted box so the player can quickly verify
+        // range and mode before moving on.
+        VStack(alignment: .leading, spacing: 10) {
+            // Class-aware. Cavalry is melee-only, so the stepper locks to 1.
+            // Artillery and infantry use a 1...maxTargetDistance stepper, where
+            // the artillery max is derived from the active fire table (updates
+            // after moved/blocks change).
+            if vm.lockTargetDistanceToMelee {
+                LabeledContent("Range to target (hexes)", value: "1")
+
+                HStack(spacing: 8) {
+                    Image(systemName: "shield.lefthalf.filled")
+                        .foregroundStyle(.tint)
+                    Text(vm.distanceToTargetHeadline)
+                        .font(.headline)
+                }
+
+                Text("Cavalry is melee-only — locked to adjacent (1 hex).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+            } else {
+                let upper = max(1, vm.maxTargetDistance)
+
+                Stepper(value: Binding(get: { vm.targetDistance },
+                                       set: { vm.targetDistance = $0 }), in: 1...upper) {
+                    LabeledContent("Range to target (hexes)", value: "\(vm.targetDistance) / \(upper)")
+                }
+
+                HStack(spacing: 8) {
+                    Image(systemName: vm.targetDistance == 1 ? "shield.lefthalf.filled" : "scope")
+                        .foregroundStyle(.tint)
+                    Text(vm.distanceToTargetHeadline)
+                        .font(.headline)
+                }
+
+                Text(vm.targetDistance == 1
+                     ? "Range 1 is melee."
+                     : "Range \(vm.targetDistance) is resolved as ranged fire.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            Text(vm.targetDistance == 1 ? "Adjacent — resolved as melee."
-                                        : "\(vm.targetDistance) hexes — resolved as ranged fire.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
+        .padding(12) // Make the distance/mode area read as one worksheet block, like Ancients.
+        .background(Color.accentColor.opacity(0.08)) // Subtle tint so this high-value rule input stands out without feeling like a warning.
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)) // Keep the grouped box soft and Apple-like.
     }
+
 
     // MARK: - Result (auto-shown)
     @ViewBuilder private var resultSection: some View {
@@ -559,6 +649,7 @@ struct CombatEntryView: View {
 /// — every number comes straight from the engine via the view model.
 struct ResultBreakdownView: View {
     let breakdown: CombatEntryViewModel.ResultBreakdown
+    @State private var expanded = false
 
     var body: some View {
         if breakdown.isTrivial {
@@ -570,12 +661,14 @@ struct ResultBreakdownView: View {
                     Text("\(breakdown.final)").bold()
                 }
                 .font(.subheadline)
+
                 if let note = breakdown.note {
                     Text(note)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
                 if let reminder = breakdown.unitReminder {
                     Text(reminder)
                         .font(.footnote)
@@ -583,62 +676,98 @@ struct ResultBreakdownView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
         } else {
-            VStack(alignment: .leading, spacing: 2) {
-                // Artillery shows a table-derived base ("Base Dice: 3 at 2 hexes");
-                // everything else shows the raw block count ("Base Dice: N blocks").
-                if let artilleryBase = breakdown.artilleryBaseDescription {
-                    Text("Base Dice: \(artilleryBase)").font(.caption)
-                } else {
-                    Text("Base Dice: \(breakdown.baseBlocks) block\(breakdown.baseBlocks == 1 ? "" : "s")")
-                        .font(.caption)
-                }
+            VStack(alignment: .leading, spacing: 0) {
+                DisclosureGroup(isExpanded: $expanded) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        // Artillery shows a table-derived base ("Base Dice: 3 at 2 hexes");
+                        // everything else shows the raw block count ("Base Dice: N blocks").
+                        if let artilleryBase = breakdown.artilleryBaseDescription {
+                            Text("Base Dice: \(artilleryBase)")
+                                .font(.caption)
+                        } else {
+                            Text("Base Dice: \(breakdown.baseBlocks) block\(breakdown.baseBlocks == 1 ? "" : "s")")
+                                .font(.caption)
+                        }
 
-                ForEach(breakdown.lines) { line in
-                    HStack {
-                        Text(line.label)
-                        Spacer()
-                        Text(line.signed).monospacedDigit()
+                        if let combinedArmsBonusNote = breakdown.combinedArmsBonusNote {
+                            VStack(alignment: .leading, spacing: 0) {
+                                HStack {
+                                    Text("Combined Arms bonus") // Label aligned with other modifier rows.
+                                    Spacer()
+                                    if let v = breakdown.combinedArmsBonusValue {
+                                        Text(v >= 0 ? "+\(v)" : "\(v)")
+                                            .monospacedDigit()
+                                    }
+                                }
+                                .font(.caption)
+
+                                Text(combinedArmsBonusNote)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+
+                        ForEach(breakdown.lines) { line in
+                            HStack {
+                                Text(line.label)
+                                Spacer()
+                                Text(line.signed).monospacedDigit()
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+
+
+                        if !breakdown.lines.isEmpty {
+                            HStack {
+                                Text("total modifiers")
+                                Spacer()
+                                Text(breakdown.total >= 0 ? "+\(breakdown.total)" : "\(breakdown.total)")
+                                    .monospacedDigit()
+                            }
+                            .font(.caption)
+                        }
+
+                        if let note = breakdown.note {
+                            Text(note)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        if let reminder = breakdown.unitReminder {
+                            Text(reminder)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
+                    .padding(.top, 4)
+                } label: {
+                    // Let DisclosureGroup provide the single built-in chevron.
+                    // We keep the summary line compact and use the same soft grouped
+                    // worksheet styling as the distance block above.
+                    HStack(spacing: 6) {
+                        Text("\(breakdown.mode): Final Dice:")
+                        Text("\(breakdown.final)").bold()
 
-                if !breakdown.lines.isEmpty {
-                    HStack {
-                        Text("total modifiers")
                         Spacer()
-                        Text(breakdown.total >= 0 ? "+\(breakdown.total)" : "\(breakdown.total)")
-                            .monospacedDigit()
                     }
-                    .font(.caption)
-                }
-
-                HStack(spacing: 0) {
-                    Text("Final Dice: ")
-                    Text("\(breakdown.final)").bold()
-                }
-                .font(.subheadline)
-                .padding(.top, 1)
-
-                if let note = breakdown.note {
-                    Text(note)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                
-                if let reminder = breakdown.unitReminder {
-                    Text(reminder)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    .font(.subheadline)
                 }
             }
+            .padding(12) // Match the worksheet-style grouped treatment used for Distance to Target.
+            .background(Color.accentColor.opacity(0.08)) // Subtle tint keeps the result readable but visually important.
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)) // Soft rounded box, matching the newer Ancients-inspired UI direction.
         }
-   
+
     }
 }
+
 
 // MARK: - Reusable rows -----------------------------------------------------
 
@@ -689,23 +818,53 @@ struct CombatPickRowContent: View {
 /// Clear"), tinted to the unit's country (gray fallback). Tapping re-expands
 /// every field with its current value preselected. Image-ready via
 /// CombatPickRowContent.
+///
+/// `trailingCallout` is for contextual reminders that belong to the current
+/// combat state, not to the static colored unit chip itself. Example: Ancients
+/// defender-only MAY EVADE / MAY NOT EVADE text.
 struct SideSummaryRow: View {
     let unit: CombatPickItem
     let countryID: String?
     let detail: String
+    let trailingCallout: String?
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            HStack {
+            HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     CombatPickRowContent(item: unit)
-                    if !detail.isEmpty {
-                        Text(detail).font(.caption).foregroundStyle(.secondary)
+
+                    // Put the contextual reminder on the same lower line as the
+                    // gray summary detail so it reads against this combat state's
+                    // blocks / terrain facts instead of competing with the colored
+                    // unit capability chip above.
+                    if !detail.isEmpty || (trailingCallout?.isEmpty == false) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            if !detail.isEmpty {
+                                Text(detail)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: 8)
+
+                            if let trailingCallout, !trailingCallout.isEmpty {
+                                Text(trailingCallout)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                        }
                     }
                 }
-                Spacer()
-                Image(systemName: "chevron.down").font(.caption).foregroundStyle(.tertiary)
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+
             }
             .contentShape(Rectangle())
         }
@@ -713,6 +872,7 @@ struct SideSummaryRow: View {
         .listRowBackground(Color.battleCalcCountry(countryID ?? "").opacity(0.30))
     }
 }
+
 
 /// Core progressive-disclosure primitive: collapsed summary when a value is
 /// chosen (tap to re-open), expanded picker otherwise; collapses on selection.
@@ -765,17 +925,29 @@ struct CombatDisclosureRow: View {
 
 /// Blocks entry. The value is pre-seeded to the unit's maxBlocks the moment the
 /// unit type is chosen (see the view model), so there is no "Set" step: the row
-/// is always a bounded stepper. Shows "N / max" and clamps to 1...maxBlocks.
+/// is always a bounded stepper. Pass 1 removes the max-block display and lets
+/// callers supply a short helper line with more useful play information.
 struct CombatBlocksRow: View {
     let label: String
     let value: Int
     let maxBlocks: Int
+    var helperText: String? = nil
     let onChange: (Int) -> Void
 
     var body: some View {
         let upper = max(1, maxBlocks)
-        Stepper(value: Binding(get: { value }, set: { onChange($0) }), in: 1...upper) {
-            LabeledContent(label, value: "\(value) / \(upper)")
+
+        VStack(alignment: .leading, spacing: 4) {
+            Stepper(value: Binding(get: { value }, set: { onChange($0) }), in: 1...upper) {
+                LabeledContent(label, value: "\(value)")
+            }
+
+            if let helperText {
+                Text(helperText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

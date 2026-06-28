@@ -802,36 +802,32 @@ struct NapoleonicsInfantryCombatEvaluator {
         var supportBreakdown = "Supporting \(armName.lowercased()) base dice \(baseBonusDice)"
 
         if attackerOutModifier != 0, let supportingTerrain {
-            supportBreakdown += "; attacking out of \(supportingTerrain.name) \(attackerOutModifier) dice"
+            supportBreakdown += "; attacking out of \(supportingTerrain.name) \(attackerOutModifier) dice" // Keep the short Results wording tied to the supporting unit's own terrain.
         }
 
         if defenderIntoModifier != 0, let defenderTerrain {
-            supportBreakdown += "; attacking into \(defenderTerrain.name) \(defenderIntoModifier) dice"
+            supportBreakdown += "; attacking into \(defenderTerrain.name) \(defenderIntoModifier) dice" // Show defender-terrain loss as part of the supporting unit's contribution.
         }
 
         if spanishMovedModifier != 0 {
-            supportBreakdown += "; Spanish moved into melee \(spanishMovedModifier) die"
+            supportBreakdown += "; Spanish moved into melee \(spanishMovedModifier) die" // Preserve the special Spanish moved-into-melee reduction in the same one-line breakdown.
         }
 
         supportBreakdown += "; net \(bonusDice) \(dieWord)"
 
+        notes.append("combinedArmsBonus:\(supportBreakdown)") // Prefix the note so the Results builder can surface it as a dedicated line without guessing.
 
         return CombinedArtilleryBonus(
             dice: bonusDice,
-            sabersCount: true,
+            sabersCount: supportingUnit.hasSaber,
             appliedRule: AppliedRule(
-                ruleID: "napoleonics.artillery.combinedAttack",
-                title: "Combined attack bonus",
-                // Fold the already-computed support-unit outcome into the final
-                // player-facing rule text instead of dropping it here. This keeps
-                // the concise "adds X dice" summary, but also preserves the more
-                // specific explanation of *why* that support unit contributed the
-                // base dice it did (square, base melee dice, unsupported artillery, etc.).
-                outcome: "\(countryName) \(armName) support adds \(bonusDice) \(dieWord). \(outcome) \(supportBreakdown)"
-
+                ruleID: "napoleonics.artillery.combinedArms",
+                title: "Combined Arms bonus",
+                outcome: "\(countryName) \(armName) support adds \(bonusDice) \(dieWord). \(outcome)"
             ),
             notes: notes
         )
+
     }
 
     

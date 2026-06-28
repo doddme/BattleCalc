@@ -346,6 +346,21 @@ final class CombatEntryViewModel: ObservableObject {
     /// Attacker's unit class, or nil before a unit is chosen.
     var attackerUnitClass: UnitClass? { attackerUnitDefinition?.unitClass }
 
+    /// Short helper text shown under the attacker Blocks row.
+    /// Prefer useful play reminders over setup data like max blocks.
+    var attackerBlocksHelperText: String? {
+        blocksHelperText(for: attackerUnitDefinition)
+    }
+
+    /// Short helper text shown under the defender Blocks row.
+    /// Even though the defender is not choosing range right now, this still gives
+    /// quick unit context like melee-only or unusual firing range.
+    var defenderBlocksHelperText: String? {
+        defenderUnit
+            .flatMap { NapoleonicsUnitLibrary.unit(for: $0.id) }
+            .flatMap { blocksHelperText(for: $0) }
+    }
+
     /// Cavalry is melee-only, so the UI locks the distance row to 1.
     var lockTargetDistanceToMelee: Bool { attackerUnitClass == .cavalry }
 
@@ -359,6 +374,63 @@ final class CombatEntryViewModel: ObservableObject {
     /// `maxMovement`, so e.g. an artillery piece with maxMovement 2 cannot be set
     /// to 3. Falls back to a permissive value before a unit is chosen.
     var maxMovedHexes: Int { attackerUnitDefinition?.combatProfile.maxMovement ?? 8 }
+
+    /// Build a short unit-info line for the Blocks row.
+    /// Artillery gets a richer active-table summary because plain "Range N"
+    /// hides the most useful play information: the dice by distance.
+    private func blocksHelperText(for unit: UnitDefinition?) -> String? {
+        guard let unit else { return nil }
+
+        var parts: [String] = []
+
+        if unit.combatProfile.isMeleeOnly || unit.unitClass == .cavalry {
+            parts.append("Close Combat only")
+        } else if unit.unitClass == .artillery {
+            if let artillerySummary = artilleryHelperText(for: unit) {
+                parts.append(artillerySummary) // Use the active artillery table so the player sees current dice by range, not just a max range.
+            } else {
+                parts.append("Range \(unit.combatProfile.range) or Melée") // Safe fallback if the artillery table is missing or not allowed.
+            }
+        } else if unit.combatProfile.range > 1 {
+            parts.append("Range \(unit.combatProfile.range) or Melée") // Infantry can still fight in close combat, so make that explicit.
+        }
+
+        if unit.combatProfile.canBattleAfterEnteringTerrainIDs.contains("forest") {
+            parts.append("May battle after entering forest") // Napoleonics uses Forest, not Woods, so match the actual terrain term and ID.
+        }
+
+        return parts.isEmpty ? nil : parts.joined(separator: " • ")
+    }
+
+    /// Short artillery helper based on the *current* active fire band.
+    /// Example: "Range 5 • 3|2|1|1|1". This reflects current blocks and whether
+    /// the unit moved, so the reminder matches the actual attack state.
+    private func artilleryHelperText(for unit: UnitDefinition) -> String? {
+        guard unit.unitClass == .artillery,
+              let tables = unit.combatProfile.artilleryFireTables else { return nil }
+
+        let moved = (attackerMovedHexes ?? 0) > 0
+        let singleBlock = (attackerBlocks ?? attackerMaxBlocks) <= 1
+
+        guard let band = artilleryActiveBand(
+            tables: tables,
+            moved: moved,
+            singleBlock: singleBlock
+        ) else {
+            return "No fire after moving" // Covers cases like foot artillery after moving.
+        }
+
+        let derivedRange = artilleryDerivedRange(band)
+        guard derivedRange > 0 else { return nil }
+
+        let diceByDistance = band.prefix(derivedRange).map { slot in
+            if let slot { return String(slot) }
+            return "-"
+        }.joined(separator: "|")
+
+        return "Range \(derivedRange) • \(diceByDistance)"
+    }
+
 
     /// Upper bound for the distance stepper. Cavalry -> 1; artillery -> its
     /// active table's derived range (falls back to 4 when the active band is
@@ -391,6 +463,33 @@ final class CombatEntryViewModel: ObservableObject {
         for (i, slot) in band.enumerated() where slot != nil { range = i + 1 }
         return range
     }
+    
+    /// Mirrors the evaluator's artillery-band selection so the entry UI can show
+    /// the same currently-active artillery table the engine will actually use.
+    private func artilleryActiveBand(
+        tables: ArtilleryFireTables,
+        moved: Bool,
+        singleBlock: Bool
+    ) -> ArtilleryFireBand? {
+        switch (moved, singleBlock) {
+        case (false, false): return tables.standingMultiBlock
+        case (false, true):  return tables.standingSingleBlock
+        case (true, false):  return tables.movingMultiBlock
+        case (true, true):   return tables.movingSingleBlock
+        }
+    }
+
+    /// Highest usable artillery distance in the active band.
+    /// Trailing nil slots are out of range and do not extend the range.
+    private func artilleryDerivedRange(_ band: ArtilleryFireBand) -> Int {
+        var range = 0
+        for (i, slot) in band.enumerated() where slot != nil {
+            range = i + 1
+        }
+        return range
+    }
+
+    
     private func supportingUnitDidChange() {
         if let unit = supportingUnit {
             // Default the support unit's blocks immediately when the user picks it,
@@ -507,17 +606,48 @@ final class CombatEntryViewModel: ObservableObject {
         return "\(targetDistance) hex\(targetDistance == 1 ? "" : "es") • \(mode)"
     }
 
+    /// Defender-only callout shown in the larger gray summary row.
+    /// Keep this empty outside melee. In Napoleonics, this first-pass reminder
+    /// covers the two simple cavalry / infantry defender reactions we want to
+    /// surface during play:
+    /// - cavalry attacker vs infantry defender -> MAY FORM SQUARE
+    /// - infantry attacker vs cavalry defender -> MAY RETIRE AND REFORM
+    var defenderContextCallout: String? {
+        guard defenderComplete else { return nil }
+        guard targetDistance == 1 else { return nil }
+        guard let attacker = attackerUnit.flatMap({ NapoleonicsUnitLibrary.unit(for: $0.id) }),
+              let defender = defenderUnit.flatMap({ NapoleonicsUnitLibrary.unit(for: $0.id) }) else {
+            return nil
+        }
+
+        // Cavalry attacks are always melee, so infantry defenders can be reminded
+        // here to consider Square against the current cavalry attacker.
+        if attacker.unitClass == .cavalry && defender.unitClass == .infantry {
+            return "MAY FORM SQUARE"
+        }
+
+        // Infantry melee attacks against cavalry should prompt the attacking
+        // player to ask whether the defending cavalry wants to Retire and Reform.
+        if attacker.unitClass == .infantry && defender.unitClass == .cavalry {
+            return "MAY RETIRE AND REFORM"
+        }
+
+        return nil
+    }
+
+
+
     /// Prominent, always-visible distance/mode phrase shown between the attacker
-    /// and defender. Distance 1 reads as melee ("Defender in Melee at 1 hex");
-    /// distance > 1 reads as ranged ("Defender at Range Attack 2 hexes away"),
-    /// driven purely by the current `targetDistance` (no engine dependency, so it
-    /// shows reliably whenever the distance is known).
+    /// and defender. Keep it short so the banner reads more like the smoother
+    /// Ancients worksheet summary and less like a full sentence.
     var distanceToTargetHeadline: String {
         if targetDistance == 1 {
-            return "Defender in Melee at 1 hex"
+            return "Close Combat"
         }
-        return "Defender at Range Attack \(targetDistance) hexes away"
+        return "Ranged Attack • \(targetDistance) hex\(targetDistance == 1 ? "" : "es")"
     }
+
+
 
     // MARK: - Cascade clearing (top-down within ONE side only).
     // Each helper clears everything below it on the same side. Cross-side
@@ -690,6 +820,15 @@ final class CombatEntryViewModel: ObservableObject {
         /// applies no terrain dice modifier but should still be explained.
         var note: String? = nil
 
+        /// Optional short explanation for artillery combined support, shown as a
+        /// dedicated Results row labeled "Combined Arms bonus".
+        var combinedArmsBonusNote: String? = nil
+        
+        /// Optional signed value for the Combined Arms bonus so the Results UI
+        /// can show "+N" aligned with other modifier rows.
+        var combinedArmsBonusValue: Int? = nil
+
+
         /// True when nothing modifies the base, so the UI can collapse to a
         /// single "Melee: Final Dice: N" line. Artillery always shows the
         /// table-derived base, so a present description forces the full layout.
@@ -728,6 +867,12 @@ final class CombatEntryViewModel: ObservableObject {
         // base-vs-blocks gap line below does not apply — the raw block count is
         // not the base for artillery. For infantry/cavalry this is nil.
         let artilleryBase = artilleryBaseDescription(from: r.notes)
+
+        // Combined artillery support already has correct engine math; this simply
+        // surfaces its short explanation and net dice in the Results section as a
+        // dedicated Combined Arms row.
+        let combinedArms = combinedArmsBonus(from: r.notes)
+
 
         // Re-expose the base-vs-raw-blocks gap as an explicit line. For melee with
         // the moved penalty this is exactly -1 ("moved to melee"); for ranged the
@@ -769,8 +914,11 @@ final class CombatEntryViewModel: ObservableObject {
             unitReminder: ignoreFlagsReminder(for: defenderUnitDefinition),
             artilleryBaseDescription: artilleryBase,
             note: ruleNote(from: r),
-           
+            combinedArmsBonusNote: combinedArms?.description,
+            combinedArmsBonusValue: combinedArms?.value
+
         )
+
     }
 
     /// Display breakdown for the battle-back (reversed) result, or nil when no
@@ -828,6 +976,32 @@ final class CombatEntryViewModel: ObservableObject {
         guard parts.count == 2, let dice = Int(parts[0]), let dist = Int(parts[1]) else { return nil }
         return "\(dice) at \(dist) hex\(dist == 1 ? "" : "es")"
     }
+    
+    /// Pull the short combined-support explanation and its net dice value out of
+    /// the evaluator notes so the Results section can show a dedicated
+    /// "Combined Arms bonus" row with "+N" aligned on the right.
+    private func combinedArmsBonus(from notes: [String]) -> (description: String, value: Int)? {
+        let prefix = "combinedArmsBonus:"
+        guard let raw = notes.first(where: { $0.hasPrefix(prefix) }) else { return nil }
+        let description = String(raw.dropFirst(prefix.count))
+
+        // Try to extract the "net N die/dice" suffix. If parsing fails, skip the
+        // numeric value so we do not risk mismatched arithmetic.
+        var value: Int? = nil
+        if let range = description.range(of: "net ") {
+            let tail = description[range.upperBound...]
+            // tail is like "4 dice" or "1 die"; split on space and parse first token.
+            let parts = tail.split(separator: " ")
+            if let first = parts.first, let parsed = Int(first) {
+                value = parsed
+            }
+        }
+
+        guard let v = value else { return nil }
+        return (description: description, value: v)
+    }
+
+
     
     /// Text only note as a tool for users to see info about the ability to ignore flags
     private func ignoreFlagsReminder(for unit: UnitDefinition?) -> String? {

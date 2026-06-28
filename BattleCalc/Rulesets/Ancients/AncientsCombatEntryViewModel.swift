@@ -81,7 +81,67 @@ final class AncientsCombatEntryViewModel: ObservableObject {
         return parts.joined(separator: " • ")
     }
 
+    /// Defender-only callout shown in the larger gray summary row.
+    /// This is intentionally contextual: only show it for the current defender
+    /// against the current attacker, and only in melee.
+    var defenderContextCallout: String? {
+        guard defenderComplete else { return nil }
+        guard isMelee else { return nil }
+        guard let attackerPick = attackerUnit,
+              let defenderPick = defenderUnit,
+              let attacker = AncientsUnitLibrary.unit(for: attackerPick.id),
+              let defender = AncientsUnitLibrary.unit(for: defenderPick.id) else {
+            return nil
+        }
+
+        return defenderMayEvadeAgainstCurrentAttacker(defender: defender, attacker: attacker)
+            ? "MAY EVADE"
+            : "MAY NOT EVADE"
+    }
+
+    /// Mirrors the current Ancients evaluator evade categories so the summary-row
+    /// reminder matches the actual combat reminder logic instead of inventing a
+    /// separate UI-only rule.
+    private func defenderMayEvadeAgainstCurrentAttacker(
+        defender: AncientsUnitDefinition,
+        attacker: AncientsUnitDefinition
+    ) -> Bool {
+        let alwaysEvadeIDs: Set<String> = [
+            "light-infantry", "light-sling-infantry", "light-bow-infantry",
+            "light-cavalry", "light-bow-cavalry", "light-chariot"
+        ]
+        if alwaysEvadeIDs.contains(defender.id) {
+            return true
+        }
+        if defender.unitClass == "artillery" {
+            return true
+        }
+        if defender.id == "leader" {
+            return true
+        }
+
+        let attackerIsFoot = attacker.unitClass == "infantry" || attacker.unitClass == "artillery"
+        let attackerIsElephant = attacker.unitClass == "elephant"
+        let heavyMountedIDs: Set<String> = ["heavy-cavalry", "cataphract-cavalry", "heavy-chariot"]
+        let attackerIsHeavyMounted = heavyMountedIDs.contains(attacker.id) || attackerIsElephant
+        let defenderIsMediumCavalryOrCamel =
+            defender.id == "medium-cavalry" || defender.id == "camel" || defender.id == "cataphract-camel"
+        let defenderIsHeavyCavalryOrChariot =
+            defender.id == "heavy-cavalry" || defender.id == "cataphract-cavalry" || defender.id == "heavy-chariot"
+
+        if defenderIsMediumCavalryOrCamel, attackerIsFoot || attackerIsHeavyMounted {
+            return true
+        }
+        if defenderIsHeavyCavalryOrChariot, attackerIsFoot || attackerIsElephant {
+            return true
+        }
+
+        return false
+    }
+
+
     var canEvaluate: Bool { buildContext() != nil }
+
     var showsBattleBackControls: Bool { isMelee && result?.validation.isAllowed == true }
     var canBattleBack: Bool { showsBattleBackControls && defenderStayedInHex == true }
 

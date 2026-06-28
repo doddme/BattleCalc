@@ -19,7 +19,9 @@ struct AncientsCombatEntryView: View {
     @StateObject private var vm = AncientsCombatEntryViewModel()
     @State private var editingAttacker = true
     @State private var editingDefender = true
+    @State private var attackerHasBeenCompleted = false
     @State private var showChangeGameConfirmation = false
+
    #if DEBUG
     @State private var showNapoleonicsDataDebug = false
     @State private var showAncientsDataDebug = false
@@ -30,7 +32,10 @@ struct AncientsCombatEntryView: View {
             List {
                 draftNotice
                 attackerSection
-                if vm.attackerComplete && !editingAttacker {
+                if attackerHasBeenCompleted {
+                    distanceBanner
+                    defenderSection
+                } else if vm.attackerComplete && !editingAttacker {
                     distanceBanner
                     defenderSection
                 }
@@ -79,7 +84,7 @@ struct AncientsCombatEntryView: View {
 
     private var draftNotice: some View {
         Section {
-            Text("Ancients draft: core dice are available. Support, Evade, retreats, and some post-roll reminders still need review.")
+            Text("Ancients is still being worked on. Currently we're updating the interface to give consistent feel between the apps. testing is still needed.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -88,8 +93,9 @@ struct AncientsCombatEntryView: View {
     private var distanceBanner: some View {
         Section {
             Button {
-                editingAttacker = true
-                editingDefender = true
+                editingAttacker = true // Reopen attacker because distance is edited from the attacker workflow.
+                editingDefender = false // Keep only one major section expanded at a time.
+
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: vm.isMelee ? "shield.lefthalf.filled" : "scope")
@@ -110,11 +116,18 @@ struct AncientsCombatEntryView: View {
     private var attackerSection: some View {
         Section("Attacker") {
             if let unit = vm.attackerUnit, vm.attackerComplete, !editingAttacker {
-                SideSummaryRow(unit: unit, countryID: nil, detail: vm.attackerSummaryDetail) {
-                    editingAttacker = true
-                    editingDefender = true
+                SideSummaryRow(
+                    unit: unit,
+                    countryID: nil,
+                    detail: vm.attackerSummaryDetail,
+                    trailingCallout: nil // Attacker never shows the defender-only evade reminder.
+                ) {
+                    editingAttacker = true // Reopen attacker for worksheet-style editing.
+                    editingDefender = false // Collapse defender when switching back to attacker.
                 }
+
             } else {
+
                 CombatDisclosureRow(label: "Unit class", selection: vm.attackerClass, options: vm.classOptions) { vm.attackerClass = $0 }
                 if vm.attackerClass != nil {
                     CombatDisclosureRow(label: "Unit type", selection: vm.attackerUnit, options: vm.attackerUnitOptions) { vm.attackerUnit = $0 }
@@ -125,30 +138,37 @@ struct AncientsCombatEntryView: View {
                     AncientsLeaderSupportRow(label: "Leader support", support: vm.attackerLeaderSupport) { vm.attackerLeaderSupport = $0 }
                 }
                 if vm.attackerMovedHexes != nil {
-                    Stepper(value: $vm.targetDistance, in: 1...6) {
-                        LabeledContent(
-                            "Distance to target",
-                            value: "\(vm.targetDistance) hex\(vm.targetDistance == 1 ? "" : "es")"
-                        )
-                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        Stepper(value: $vm.targetDistance, in: 1...6) {
+                            LabeledContent(
+                                "Distance to target",
+                                value: "\(vm.targetDistance) hex\(vm.targetDistance == 1 ? "" : "es")"
+                            )
+                        }
 
-                    HStack(spacing: 8) {
-                        Image(systemName: vm.isMelee ? "shield.lefthalf.filled" : "scope")
-                            .foregroundStyle(.tint)
-                        Text(vm.distanceHeadline)
-                            .font(.headline)
-                    }
+                        HStack(spacing: 8) {
+                            Image(systemName: vm.isMelee ? "shield.lefthalf.filled" : "scope")
+                                .foregroundStyle(.tint)
+                            Text(vm.distanceHeadline)
+                                .font(.headline)
+                        }
 
-                    Text("Range 1 is Close Combat. Range 2 or more is ranged combat if the unit can fire that far.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        Text("Range 1 is Close Combat. Range 2 or more is ranged combat if the unit can fire that far.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12) // Group distance controls into a more visible, worksheet-style box.
+                    .background(Color.accentColor.opacity(0.08)) // Add a subtle tint so Distance to Target stands out without looking like an alert.  Raise or lower to change tint.
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)) // Keep the highlighted distance area soft and Apple-like.
 
                     CombatDisclosureRow(label: "Terrain (occupies)", selection: vm.attackerTerrain, options: vm.terrainOptions) {
                         vm.attackerTerrain = $0
                     }
 
+
                     if vm.attackerComplete {
                         Button("Done") {
+                            attackerHasBeenCompleted = true // Remember that Attacker was completed once so later edits can keep Defender visible.
                             editingAttacker = false
                         }
                     }
@@ -163,10 +183,18 @@ struct AncientsCombatEntryView: View {
     private var defenderSection: some View {
         Section("Defender") {
             if let unit = vm.defenderUnit, vm.defenderComplete, !editingDefender {
-                SideSummaryRow(unit: unit, countryID: nil, detail: vm.defenderSummaryDetail) {
-                    editingDefender = true
+                SideSummaryRow(
+                    unit: unit,
+                    countryID: nil,
+                    detail: vm.defenderSummaryDetail,
+                    trailingCallout: vm.defenderContextCallout
+                ) {
+                    editingAttacker = false // Collapse attacker when switching to defender so only one section stays open.
+                    editingDefender = true // Reopen defender for worksheet-style editing.
                 }
+
             } else {
+
                 CombatDisclosureRow(label: "Unit class", selection: vm.defenderClass, options: vm.classOptions) { vm.defenderClass = $0 }
                 if vm.defenderClass != nil {
                     CombatDisclosureRow(label: "Unit type", selection: vm.defenderUnit, options: vm.defenderUnitOptions) { vm.defenderUnit = $0 }
@@ -255,6 +283,7 @@ struct AncientsCombatEntryView: View {
         vm.reset()
         editingAttacker = true
         editingDefender = true
+        attackerHasBeenCompleted = false
     }
 }
 
@@ -340,42 +369,158 @@ private struct AncientsLeaderInfoSheet: View {
     }
 }
 
+// MARK: - Ancients result breakdown -------------------------------------------
+
+// Display-only dice line for the expandable Ancients result trace. This mirrors
+// the Napoleonics result breakdown pattern so the UI shape can be standardized
+// later without changing combat math here.
+private struct AncientsDiceModifierLine: Identifiable, Hashable {
+    let id = UUID()
+    let label: String
+    let value: Int
+
+    var signed: String { value >= 0 ? "+\(value)" : "\(value)" } // Show the modifier with an explicit sign so the arithmetic is easy to follow.
+}
+
+// Everything the expandable Ancients result trace needs. This is presentation
+// only — it does not alter evaluator output, it just explains it more clearly.
+private struct AncientsResultBreakdown {
+    let base: Int
+    let lines: [AncientsDiceModifierLine]
+    let total: Int
+    let final: Int
+
+    var isTrivial: Bool { lines.isEmpty && base == final } // Allow the trace to stay compact when nothing changes the base.
+}
+
+
+
 private struct AncientsResultRows: View {
     let result: CombatResult
     @State private var showingLeaderInfo = false
+    @State private var showingDiceTrace = false // Controls expansion of the Final dice trace without changing combat math.
+
+    private var breakdown: AncientsResultBreakdown? {
+        guard result.validation.isAllowed,
+              let base = result.baseDice,
+              let final = result.finalDice
+        else { return nil }
+
+        let lines = result.modifiers.map {
+            AncientsDiceModifierLine(label: shortModifierLabel(for: $0), value: $0.value)
+        } // Convert engine modifiers into compact signed display lines for the player-facing dice trace.
+
+        return AncientsResultBreakdown(
+            base: base,
+            lines: lines,
+            total: result.modifierTotal, // Use the engine-provided modifier total so the display matches the evaluated result exactly.
+            final: final
+        )
+    }
+
+    private func shortModifierLabel(for modifier: CombatModifier) -> String {
+        if let detail = modifier.detail, !detail.isEmpty {
+            return modifier.label.isEmpty ? detail : modifier.label // Prefer the short label, but keep detail available when the label alone would be too vague.
+        }
+        return modifier.label.isEmpty ? "modifier" : modifier.label
+    }
 
     var body: some View {
+
         if result.validation.isAllowed {
             if let baseDice = result.baseDice, let finalDice = result.finalDice {
-                LabeledContent("Base dice", value: "\(baseDice)")
-                LabeledContent("Final dice", value: "\(finalDice)")
-            }
-            ForEach(result.appliedRules) { rule in
-                let isLeaderRule = rule.ruleID.contains(".leader")
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(rule.title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(isLeaderRule ? .purple : .primary)
-                    Text(rule.outcome)
-                        .font(.caption)
-                        .foregroundStyle(isLeaderRule ? .purple : .secondary)
-                    if rule.ruleID == "ancients.post-roll.leader.attached" {
-                        Button("Leader Info") { showingLeaderInfo = true }
-                            .font(.caption)
-                            .buttonStyle(.bordered)
-                            .tint(.purple)
+                VStack(alignment: .leading, spacing: 6) { // Keep the answer row visually distinct while leaving the supporting trace rows plain.
+                    // Keep the result compact by default, but allow players to open a dice trace when they want to verify the arithmetic.
+                    Button {
+                        showingDiceTrace.toggle() // Expand or collapse the dice trace from the Final dice row itself.
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("Final Dice:")
+                                .font(.headline.weight(.bold)) // Make the main result label read like the primary answer, not supporting detail.
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text("\(finalDice)")
+                                .font(.headline.weight(.bold)) // Match the label emphasis so the total reads as one strong headline result.
+                                .foregroundStyle(.primary)
+                            Image(systemName: showingDiceTrace ? "chevron.up" : "chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
+                        .padding(12) // Highlight only the Final Dice row so it stands apart from the supporting trace.
+                        .background(Color.accentColor.opacity(0.08)) // Use the subtle tint only on the main answer row.
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)) // Keep the highlighted answer row visually consistent with the distance styling.
                     }
+                    .buttonStyle(.plain)
+
+                    if showingDiceTrace, let breakdown {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Base Dice: \(breakdown.base)")
+                                .font(.caption) // Start the expanded trace with the engine base before any modifiers are applied.
+
+                            ForEach(breakdown.lines) { line in
+                                HStack {
+                                    Text(line.label)
+                                    Spacer()
+                                    Text(line.signed)
+                                        .monospacedDigit()
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            }
+
+                            if !breakdown.lines.isEmpty {
+                                HStack {
+                                    Text("Total Modifiers")
+                                    Spacer()
+                                    Text(breakdown.total >= 0 ? "+\(breakdown.total)" : "\(breakdown.total)")
+                                        .monospacedDigit()
+                                }
+                                .font(.caption) // Show the combined modifier total so players can quickly verify the arithmetic.
+                            }
+
+                            ForEach(result.appliedRules) { rule in
+                                let isLeaderRule = rule.ruleID.contains(".leader")
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(rule.title)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(isLeaderRule ? .purple : .primary)
+                                    Text(rule.outcome)
+                                        .font(.caption)
+                                        .foregroundStyle(isLeaderRule ? .purple : .secondary)
+                                    if rule.ruleID == "ancients.post-roll.leader.attached" {
+                                        Button("Leader Info") { showingLeaderInfo = true }
+                                            .font(.caption)
+                                            .buttonStyle(.bordered)
+                                            .tint(.purple)
+                                    }
+                                }
+                                .padding(.vertical, 2) // Keep rule explanations inside the Final Dice disclosure so all result reasoning lives in one place.
+                            }
+                            .sheet(isPresented: $showingLeaderInfo) {
+                                AncientsLeaderInfoSheet() // Keep the Leader Info sheet attached to a concrete view inside the disclosure.
+                            }
+
+                            ForEach(result.notes, id: \.self) { note in
+
+                                Text(note)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            HStack(spacing: 0) {
+                                Text("Final Dice: ")
+                                Text("\(breakdown.final)").bold()
+                            }
+                            .font(.caption) // End the expanded trace with Final Dice so the arithmetic lands on the answer after all explanation text.
+                        }
+                        .padding(.top, 4) // Give the expanded trace a little breathing room under the highlighted answer row.
+                    }
+
                 }
-                .padding(.vertical, 2)
+
             }
-            .sheet(isPresented: $showingLeaderInfo) {
-                AncientsLeaderInfoSheet()
-            }
-            ForEach(result.notes, id: \.self) { note in
-                Text(note)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+
         } else {
             ForEach(result.validation.reasons, id: \.self) { reason in
                 Text(reason)

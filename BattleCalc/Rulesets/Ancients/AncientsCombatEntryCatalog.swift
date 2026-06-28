@@ -60,21 +60,27 @@ enum AncientsCombatEntryCatalog {
     private static let preferredClassOrder = ["infantry", "cavalry", "chariot", "elephant", "artillery"]
     private static let preferredTerrainOrder = ["clear", "hill", "forest", "river", "camp"]
 
+    /// Builds the static colored-chip subtitle for Ancients unit choices.
+    /// Keep this limited to always-true unit facts; matchup-specific reminders
+    /// like evade belong in the larger gray summary area instead.
+    /// Builds the static colored-chip subtitle for Ancients unit choices.
+    /// Keep this limited to always-true unit facts the player may want to scan
+    /// before choosing a unit. Matchup-specific reminders like evade belong in
+    /// the larger gray summary area instead.
     private static func unitSubtitle(for unit: AncientsUnitDefinition) -> String {
-        var parts = [
+        let parts = [
             displayName(forSymbolGroup: unit.symbolGroup),
-            "Movement \(unit.move)",
-            "Max Range \(unit.range)",
-            "Melee \(unit.meleeDice)",
-            "Max Blocks \(unit.maxBlocks)"
+            "Move: \(unit.move)",
+            "Max Range: \(unit.range) Hexes",
+            "Melee \(unit.meleeDice) Dice"
         ]
 
-        if unit.canEvade {
-            parts.append("evades")
-        }
-
+        // Do not show generic evade text here.
+        // In Ancients, evade is only useful as a defender-only reminder against
+        // the current attacker in melee, so it should live in the outer summary.
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
     }
+
 
     private static func symbolGroupRank(_ id: String) -> Int {
         switch id.lowercased() {
