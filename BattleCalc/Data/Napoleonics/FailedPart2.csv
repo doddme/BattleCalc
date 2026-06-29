@@ -1,0 +1,4 @@
+    t110,FranceVsAustria_FrenchCuirassierChargeVsAustrianLineOnHill,2,1,french-cuirassier-heavy,4,clear,austrian-line-infantry,5,hill,FALSE,,,,,,,TRUE,4
+    t115,FranceVsBritain_FrenchGuardHeavyCavalryChargeVsBritishGuardGrenadier,2,1,french-guard-heavy-cavalry,4,clear,british-guard-grenadier,4,town,FALSE,,,,,,,TRUE,3
+    t119,BritainVsPortugal_BritishLightCavalryChargeVsPortugueseMilitia,2,1,british-light-cavalry,3,clear,portuguese-militia,4,clear,FALSE,,,,,,,TRUE,3
+    t127,Britain_HorseArtilleryVsSpanishLine,0,5,british-rocket-artillery,3,clear,spanish-line-infantry,4,clear,FALSE,,,,,,,TRUE,2

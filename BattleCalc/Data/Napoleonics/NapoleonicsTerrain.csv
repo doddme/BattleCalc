@@ -1,4 +1,4 @@
-Id,name,blocksBattleonEntry,blocksLineofSight,InfantryINTOPenalty,CavalryINTOPenalty,ArtilleryINTOPenalty,InfantryOutPenalty,CavalryOutPenalty,ArtilleryOutPenalty,InfantryMeleeINTO,CavalryMeleeINTO,ArtilleryMeleeINTO,MayFormSquare
+Id,name,blocksBattleonEntry,blocksLineofSight,InfantryINTOPenalty,CavalryINTOPenalty,ArtilleryINTOPenalty,InfantryOutPenalty,CavalryOutPenalty,ArtilleryOutPen,InfantryMeleeINTO,CavalryMeleeINTO,ArtilleryMeleeINTO,MayFormSquare
 hill,Hill,FALSE,TRUE,-1,-1,0,0,-1,0,0,0,0,TRUE
 forest,Forest,TRUE,TRUE,-1,-2,-1,0,-2,-1,0,0,0,TRUE
 bridge,Bridge,FALSE,FALSE,0,0,0,0,0,0,0,0,0,TRUE
