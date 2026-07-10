@@ -31,9 +31,14 @@ struct AncientsUnitDefinition: Codable, Hashable, Identifiable {
     let canBonusCloseCombat: Bool
     let swordsHit: Bool
     let canBattleAfterEnteringForest: Bool
-    let postRollNote: String?
+    // Direction-specific post-roll reminders keep the combat worksheet concise:
+    // show the attack-facing reminder only for the attacker and the defend-facing
+    // reminder only for the defender.
+    let postRollNoteWhenAttacking: String?
+    let postRollNoteWhenDefending: String?
     let closeCombatRuleSource: String?
     let special: String?
+
 }
 
 enum AncientsUnitCSVLoader {
@@ -44,7 +49,9 @@ enum AncientsUnitCSVLoader {
         "move", "range", "holdFireDice", "moveFireDice", "rangedMaxMove", "rangedRuleSource", "meleeDice",
         "closeCombatMaxMove", "battleBackDiceOverride",
         "canEvade", "retreatDistance", "canMomentumAdvance",
-        "canBonusCloseCombat", "swordsHit", "canBattleAfterEnteringForest", "postRollNote", "closeCombatRuleSource", "special"
+        "canBonusCloseCombat", "swordsHit", "canBattleAfterEnteringForest",
+        "postRollNoteWhenAttacking", "postRollNoteWhenDefending",
+        "closeCombatRuleSource", "special"
     ]
 
     static func loadUnitDefinitions() throws -> [AncientsUnitDefinition] {
@@ -72,7 +79,8 @@ enum AncientsUnitCSVLoader {
                 canBonusCloseCombat: try AncientsCSV.bool(row["canBonusCloseCombat"] ?? "", field: "canBonusCloseCombat", rowID: id),
                 swordsHit: try AncientsCSV.bool(row["swordsHit"] ?? "", field: "swordsHit", rowID: id),
                 canBattleAfterEnteringForest: try AncientsCSV.bool(row["canBattleAfterEnteringForest"] ?? "", field: "canBattleAfterEnteringForest", rowID: id),
-                postRollNote: (row["postRollNote"] ?? "").isEmpty ? nil : row["postRollNote"],
+                postRollNoteWhenAttacking: (row["postRollNoteWhenAttacking"] ?? "").isEmpty ? nil : row["postRollNoteWhenAttacking"],
+                postRollNoteWhenDefending: (row["postRollNoteWhenDefending"] ?? "").isEmpty ? nil : row["postRollNoteWhenDefending"],
                 closeCombatRuleSource: (row["closeCombatRuleSource"] ?? "").isEmpty ? nil : row["closeCombatRuleSource"],
                 special: (row["special"] ?? "").isEmpty ? nil : row["special"]
             )

@@ -84,7 +84,7 @@ struct AncientsCombatEntryView: View {
 
     private var draftNotice: some View {
         Section {
-            Text("Ancients is still being worked on. Currently we're updating the interface to give consistent feel between the apps. testing is still needed.")
+            Text("Ancients is still being worked on. Pardon our dust.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -418,40 +418,154 @@ private struct AncientsResultRows: View {
         )
     }
 
-    private func shortModifierLabel(for modifier: CombatModifier) -> String {
-        if let detail = modifier.detail, !detail.isEmpty {
-            return modifier.label.isEmpty ? detail : modifier.label // Prefer the short label, but keep detail available when the label alone would be too vague.
+    // MARK: - Compact symbol summary
+    // Elevate helmet/sword hit-status into the collapsed Final Dice box so
+    // players can see those roll-result reminders immediately on iPhone
+    // without opening the full explanation. This reuses evaluator output that
+    // is already present on CombatResult instead of reaching for extra state
+    // that this view does not own.
+    private var helmetStatus: String? {
+        guard result.validation.isAllowed else { return nil }
+
+        let searchableText = (
+            result.appliedRules.map(\.outcome)
+            + result.appliedRules.map(\.title)
+            + result.notes
+        ).joined(separator: " ")
+
+        if searchableText.localizedCaseInsensitiveContains("Elephants do not receive Close Combat benefits from leaders") {
+            return "NO"
         }
-        return modifier.label.isEmpty ? "modifier" : modifier.label
+
+        if searchableText.localizedCaseInsensitiveContains("helmet symbols score hits in Close Combat")
+            || searchableText.localizedCaseInsensitiveContains("helmets can hit in Close Combat") {
+            return "YES"
+        }
+
+        if searchableText.localizedCaseInsensitiveContains("leaders do not affect Ranged Combat hit symbols") {
+            return "NO"
+        }
+
+        return nil
     }
 
-    var body: some View {
+    // Keep sword status compact too. We only surface it when the evaluated
+    // result already contains sword guidance, so the collapsed row stays small
+    // and does not guess at hidden rules.
+    private var swordsStatus: String? {
+        guard result.validation.isAllowed else { return nil }
 
-        if result.validation.isAllowed {
-            if let baseDice = result.baseDice, let finalDice = result.finalDice {
-                VStack(alignment: .leading, spacing: 6) { // Keep the answer row visually distinct while leaving the supporting trace rows plain.
-                    // Keep the result compact by default, but allow players to open a dice trace when they want to verify the arithmetic.
-                    Button {
-                        showingDiceTrace.toggle() // Expand or collapse the dice trace from the Final dice row itself.
-                    } label: {
-                        HStack(spacing: 8) {
-                            Text("Final Dice:")
-                                .font(.headline.weight(.bold)) // Make the main result label read like the primary answer, not supporting detail.
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Text("\(finalDice)")
-                                .font(.headline.weight(.bold)) // Match the label emphasis so the total reads as one strong headline result.
-                                .foregroundStyle(.primary)
-                            Image(systemName: showingDiceTrace ? "chevron.up" : "chevron.down")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .contentShape(Rectangle())
-                        .padding(12) // Highlight only the Final Dice row so it stands apart from the supporting trace.
-                        .background(Color.accentColor.opacity(0.08)) // Use the subtle tint only on the main answer row.
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)) // Keep the highlighted answer row visually consistent with the distance styling.
-                    }
-                    .buttonStyle(.plain)
+        let searchableText = (
+            result.appliedRules.map(\.outcome)
+            + result.appliedRules.map(\.title)
+            + result.notes
+        ).joined(separator: " ")
+
+        // Accept legacy "saber" wording too so older notes still feed the compact "Swords: YES/NO" summary.
+        let mentionsSwordTerm =
+            searchableText.localizedCaseInsensitiveContains("sword")
+            || searchableText.localizedCaseInsensitiveContains("saber")
+
+        guard mentionsSwordTerm else {
+            return nil
+        }
+        
+        if searchableText.localizedCaseInsensitiveContains("do not")
+            || searchableText.localizedCaseInsensitiveContains("cannot")
+            || searchableText.localizedCaseInsensitiveContains("no sword")
+            || searchableText.localizedCaseInsensitiveContains("no swords")
+            || searchableText.localizedCaseInsensitiveContains("no saber")
+            || searchableText.localizedCaseInsensitiveContains("no sabers") {
+            return "NO"
+        }
+
+        if searchableText.localizedCaseInsensitiveContains("swords hit")
+            || searchableText.localizedCaseInsensitiveContains("sword symbols hit")
+            || searchableText.localizedCaseInsensitiveContains("swords can hit")
+            || searchableText.localizedCaseInsensitiveContains("sabers hit")
+            || searchableText.localizedCaseInsensitiveContains("saber symbols hit")
+            || searchableText.localizedCaseInsensitiveContains("sabers can hit") {
+            return "YES"
+        }
+
+
+        return nil
+    }
+
+
+       // This is intentionally caption-sized so the Final Dice box can stay
+       // compact on iPhone. Only the word "Helmet" is purple so the helmet side
+       // of the dice stands out without turning the whole row into a color callout.
+       @ViewBuilder
+       private var compactSymbolStatusRow: some View {
+           if helmetStatus != nil || swordsStatus != nil {
+               HStack(spacing: 8) {
+                   if let helmetStatus {
+                       (
+                           Text("Helmet").foregroundStyle(.purple)
+                           + Text(": \(helmetStatus)").foregroundStyle(.secondary)
+                       )
+                       .font(.caption2.weight(.semibold))
+                       .lineLimit(1)
+                   }
+
+                   if helmetStatus != nil && swordsStatus != nil {
+                       Text("•")
+                           .font(.caption2)
+                           .foregroundStyle(.tertiary)
+                   }
+
+                   if let swordsStatus {
+                       Text("Swords: \(swordsStatus)")
+                           .font(.caption2.weight(.semibold))
+                           .foregroundStyle(.secondary)
+                           .lineLimit(1)
+                   }
+
+                   Spacer(minLength: 0)
+               }
+           }
+       }
+
+       private func shortModifierLabel(for modifier: CombatModifier) -> String {
+           if let detail = modifier.detail, !detail.isEmpty {
+               return modifier.label.isEmpty ? detail : modifier.label // Prefer the short label, but keep detail available when the label alone would be too vague.
+           }
+           return modifier.label.isEmpty ? "modifier" : modifier.label
+       }
+
+       var body: some View {
+
+           if result.validation.isAllowed {
+               if let finalDice = result.finalDice {
+                   VStack(alignment: .leading, spacing: 6) { // Keep the answer row visually distinct while leaving the supporting trace rows plain.
+                       // Keep the result compact by default, but allow players to open a dice trace when they want to verify the arithmetic.
+                       Button {
+                           showingDiceTrace.toggle() // Expand or collapse the dice trace from the Final dice row itself.
+                       } label: {
+                           VStack(alignment: .leading, spacing: 4) {
+                               HStack(spacing: 8) {
+                                   Text("Final Dice:")
+                                       .font(.headline.weight(.bold)) // Make the main result label read like the primary answer, not supporting detail.
+                                       .foregroundStyle(.primary)
+                                   Spacer()
+                                   Text("\(finalDice)")
+                                       .font(.headline.weight(.bold)) // Match the label emphasis so the total reads as one strong headline result.
+                                       .foregroundStyle(.primary)
+                                   Image(systemName: showingDiceTrace ? "chevron.up" : "chevron.down")
+                                       .font(.caption)
+                                       .foregroundStyle(.tertiary)
+                               }
+
+                               compactSymbolStatusRow
+                           }
+                           .contentShape(Rectangle())
+                           .padding(12) // Highlight only the Final Dice row so it stands apart from the supporting trace.
+                           .background(Color.accentColor.opacity(0.08)) // Use the subtle tint only on the main answer row.
+                           .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)) // Keep the highlighted answer row visually consistent with the distance styling.
+                       }
+                       .buttonStyle(.plain)
+
 
                     if showingDiceTrace, let breakdown {
                         VStack(alignment: .leading, spacing: 6) {

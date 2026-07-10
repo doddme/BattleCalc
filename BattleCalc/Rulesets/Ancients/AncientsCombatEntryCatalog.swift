@@ -69,7 +69,7 @@ enum AncientsCombatEntryCatalog {
     /// the larger gray summary area instead.
     private static func unitSubtitle(for unit: AncientsUnitDefinition) -> String {
         let parts = [
-            displayName(forSymbolGroup: unit.symbolGroup),
+            //displayName(forSymbolGroup: unit.symbolGroup),
             "Move: \(unit.move)",
             "Max Range: \(unit.range) Hexes",
             "Melee \(unit.meleeDice) Dice"

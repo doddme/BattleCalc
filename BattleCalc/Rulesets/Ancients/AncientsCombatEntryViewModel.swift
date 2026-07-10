@@ -13,14 +13,32 @@ import Combine
 final class AncientsCombatEntryViewModel: ObservableObject {
     private let evaluator = AncientsCombatEvaluator()
 
-    @Published var attackerClass: CombatPickItem? { didSet { if attackerClass?.id != oldValue?.id { clearAttackerUnit() } } }
+    // If a class has only one available unit type (for example Elephant),
+    // auto-select it so the user does not have to confirm the only valid choice.
+    @Published var attackerClass: CombatPickItem? {
+        didSet {
+            if attackerClass?.id != oldValue?.id {
+                clearAttackerUnit()
+                autoSelectOnlyAttackerUnitIfNeeded()
+            }
+        }
+    }
     @Published var attackerUnit: CombatPickItem? { didSet { if attackerUnit?.id != oldValue?.id { attackerUnitDidChange() } } }
     @Published var attackerBlocks: Int = 1 { didSet { recompute() } }
     @Published var attackerMovedHexes: Int? { didSet { recompute() } }
     @Published var attackerTerrain: CombatPickItem? { didSet { if attackerTerrain?.id != oldValue?.id { recompute() } } }
     @Published var attackerLeaderSupport: CombatLeaderSupport = .none { didSet { recompute() } }
 
-    @Published var defenderClass: CombatPickItem? { didSet { if defenderClass?.id != oldValue?.id { clearDefenderUnit() } } }
+    // Match attacker behavior: when only one defender unit type exists for the
+    // selected class, pick it automatically.
+    @Published var defenderClass: CombatPickItem? {
+        didSet {
+            if defenderClass?.id != oldValue?.id {
+                clearDefenderUnit()
+                autoSelectOnlyDefenderUnitIfNeeded()
+            }
+        }
+    }
     @Published var defenderUnit: CombatPickItem? { didSet { if defenderUnit?.id != oldValue?.id { defenderUnitDidChange() } } }
     @Published var defenderBlocks: Int = 1 { didSet { recompute() } }
     @Published var defenderTerrain: CombatPickItem? { didSet { if defenderTerrain?.id != oldValue?.id { recompute() } } }
@@ -306,4 +324,18 @@ final class AncientsCombatEntryViewModel: ObservableObject {
         defenderSupported = false
         recompute()
     }
+    
+    // Keep the worksheet moving when a class has only one legal unit type.
+    // This is especially helpful on iPhone because it removes an unnecessary tap.
+    private func autoSelectOnlyAttackerUnitIfNeeded() {
+        guard attackerUnit == nil, attackerUnitOptions.count == 1 else { return }
+        attackerUnit = attackerUnitOptions[0]
+    }
+
+    // Same behavior for the defender side.
+    private func autoSelectOnlyDefenderUnitIfNeeded() {
+        guard defenderUnit == nil, defenderUnitOptions.count == 1 else { return }
+        defenderUnit = defenderUnitOptions[0]
+    }
+
 }

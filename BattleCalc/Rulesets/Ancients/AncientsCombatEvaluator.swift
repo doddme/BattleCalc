@@ -379,11 +379,14 @@ struct AncientsCombatEvaluator {
         var guidance: [String] = []
         var leaderGuidance: [String] = []
 
+        // Use direction-specific post-roll reminders so the worksheet only shows
+        // the special note that actually applies to this unit's current role in
+        // the combat. Blank fields intentionally add nothing.
         if mode == .melee {
-            if let attackerNote = attacker.postRollNote {
+            if let attackerNote = attacker.postRollNoteWhenAttacking {
                 guidance.append("Attacker — \(attacker.name): \(attackerNote)")
             }
-            if let defenderNote = defender.postRollNote {
+            if let defenderNote = defender.postRollNoteWhenDefending {
                 guidance.append("Defender — \(defender.name): \(defenderNote)")
             }
         }
