@@ -234,12 +234,15 @@ struct AncientsCombatEvaluator {
         let token = unit.meleeDice.trimmingCharacters(in: .whitespacesAndNewlines)
         if let fixed = Int(token) { return fixed }
 
+        // Ancients dashed melee tokens use full-strength first, then reduced.
+        // Example: "3-2" means 3 dice at full strength and 2 dice when reduced.
         let parts = token.split(separator: "-")
         if parts.count == 2,
-           let damaged = Int(parts[0]),
-           let fullStrength = Int(parts[1]) {
+           let fullStrength = Int(parts[0]),
+           let damaged = Int(parts[1]) {
             return currentBlocks >= unit.maxBlocks ? fullStrength : damaged
         }
+
 
         // Tokens like "*" need special rules before they are player-ready.
         return 0

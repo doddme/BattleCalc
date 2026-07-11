@@ -1,0 +1,87 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "F2831AA8",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "1.99",
+      "familyShareable" : false,
+      "internalID" : "6789957911",
+      "localizations" : [
+        {
+          "description" : "Optional tip to support future updates.",
+          "displayName" : "A little boost",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.mikedodd.dicecalc.tip.alittleboost",
+      "referenceName" : "A little boost",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "6789958779",
+      "localizations" : [
+        {
+          "description" : "Optional tip for players who want to give extra support",
+          "displayName" : "THE LEGEND",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.mikedodd.dicecalc.tip.thelegend",
+      "referenceName" : "THE LEGEND",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "2.99",
+      "familyShareable" : false,
+      "internalID" : "6789958197",
+      "localizations" : [
+        {
+          "description" : "Optional tip to help support continued improvements",
+          "displayName" : "The Sweet Spot",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.mikedodd.dicecalc.tip.thesweetspot",
+      "referenceName" : "The Sweet Spot",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6781473232",
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : false,
+    "_billingIssuesEnabled" : false,
+    "_developerTeamID" : "362XZ3MS4G",
+    "_disableDialogs" : false,
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 805488220.38414097,
+    "_locale" : "en_US",
+    "_renewalBillingIssuesEnabled" : false,
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ],
+    "_timeRate" : 0
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 5,
+    "minor" : 0
+  }
+}
